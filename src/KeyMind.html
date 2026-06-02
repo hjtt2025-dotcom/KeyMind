@@ -1,0 +1,2903 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KeyMind - 桌面端统计</title>
+    <script>document.write('<script src="data.js?t=' + new Date().getTime() + '"><\/script>');</script>
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+    <style>
+        /* 基础重置与系统级字体 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        /* 核心窗口：无缝贴合原生独立窗口 */
+        .window {
+            width: 100vw;
+            height: 100vh;
+            background: rgba(250, 250, 250, 0.4);
+            display: flex;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background: linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        
+
+        /* 左侧导航栏 */
+        .sidebar {
+            width: 220px;
+            background: rgba(243, 243, 243, 0.6);
+            border-right: 1px solid rgba(0, 0, 0, 0.05);
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .brand {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 32px;
+            padding-left: 12px;
+            display: flex;
+            align-items: center;
+        }
+
+        .brand-icon {
+            width: 12px;
+            height: 12px;
+            background: #0067c0;
+            border-radius: 3px;
+            margin-right: 8px;
+        }
+
+        .nav-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .nav-item {
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #444444;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 4px;
+        }
+
+        .nav-item:hover {
+            background: rgba(0, 0, 0, 0.04);
+        }
+
+        .nav-item.active {
+            background: #ffffff;
+            color: #1a1a1a;
+            font-weight: 600;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+            position: relative;
+        }
+
+        .nav-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 16px;
+            background: #0067c0;
+            border-radius: 0 2px 2px 0;
+        }
+
+        .version-info {
+            margin-top: auto;
+            padding-left: 12px;
+            font-size: 12px;
+            color: #888888;
+        }
+
+        /* 右侧主内容区 */
+        .content {
+            flex: 1;
+            padding: 32px 0 32px 40px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden; /* 彻底禁止大容器自身出现任何滚动条 */
+        }
+
+        /* 自定义滚动条样式，全局生效，去除默认白边 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 3px;
+            border: none;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+            border: none;
+        }
+
+        .page-header {
+            margin-bottom: 28px;
+        }
+
+        .page-title {
+            font-size: 22px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        /* 标签页控制 */
+        /* 标签页控制 */
+        .tab-pane {
+            display: none;
+            flex-direction: column;
+            flex: 1;
+            animation: fadeIn 0.3s ease;
+            padding-right: 40px;
+        }
+
+        /* 专门为深度分析、历史记录以及设置页面开启滚动，并严格禁止横向滚动 */
+        #tab-analysis, #tab-history, #tab-settings {
+            overflow-y: auto;
+            overflow-x: hidden; /* 防止因为鼠标气泡超出边界导致的横向滚动条 */
+        }
+
+        /* 强制实时看板禁止滚动 */
+        #tab-dashboard {
+            overflow: hidden;
+        }
+
+        .tab-pane.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 数据卡片网格布局 */
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto;
+            gap: 20px;
+            flex: 1;
+        }
+
+        /* 统一的卡片质感 */
+        .card {
+            background-color: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            display: flex;
+            flex-direction: column;
+            /* 精准打击：只过渡明确的物理属性，严禁触碰 background-image 引发闪烁 */
+            transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+            background-color: rgba(255, 255, 255, 0.95);
+        }
+
+        .card-large {
+            grid-column: 1 / 2;
+            grid-row: 1 / 3;
+            background-image: linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.8) 100%);
+            background-color: transparent;
+        }
+
+        /* 深度分析专用的全宽卡片 */
+        .card-full {
+            grid-column: 1 / 3;
+            background-image: linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.8) 100%);
+            background-color: transparent;
+        }
+
+        .card-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: #444444;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .number-huge {
+            font-size: 52px;
+            font-weight: 700;
+            color: #1a1a1a;
+            line-height: 1;
+            margin-top: 32px;
+            margin-bottom: 32px;
+            text-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .insight-box {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            padding-top: 16px;
+            border-top: 1px dashed rgba(0, 0, 0, 0.08);
+        }
+
+        .insight-text {
+            font-size: 13px;
+            color: #666666;
+            line-height: 1.6;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            font-weight: normal;
+        }
+        
+        .insight-text:last-child {
+            margin-bottom: 0;
+        }
+
+        .number-normal {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1a1a1a;
+        }
+
+        .unit {
+            font-size: 15px;
+            font-weight: 600;
+            color: #666666;
+            margin-left: 4px;
+        }
+
+        /* 底部热键栏 */
+        .hotkey-bar {
+            margin-top: 20px;
+            padding: 16px 24px;
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+        }
+
+        .hotkey-label {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-right: 24px;
+        }
+
+        .hotkey-list {
+            display: flex;
+        }
+
+        .key-tag {
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            padding: 6px 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            margin-right: 12px;
+        }
+
+        .key-tag:hover {
+            background: #f8f9fa;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            transform: translateY(-1px);
+        }
+
+        .key-tag:active {
+            background: #f0f0f0;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+            transform: translateY(1px);
+        }
+
+        .key-count {
+            color: #888888;
+            font-weight: normal;
+            margin-left: 12px;
+        }
+
+        /* --- 深度分析模块专属样式 --- */
+
+
+       .composition-bar {
+            display: block;
+            position: relative;
+            height: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 16px 0 20px 0;
+            background: #f0f0f0;
+            transform: translateZ(0);
+        }
+
+        .composition-bar::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            /* 顶部泛白高光，底部微暗阴影，制造立体微曲面效果以柔化边缘 */
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.45) 0%, transparent 35%, transparent 65%, rgba(0, 0, 0, 0.12) 100%);
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+            pointer-events: none;
+            border-radius: 6px;
+            z-index: 2;
+        }
+
+        .comp-segment {
+            float: left;
+            height: 12px;
+            transition: width 0.5s ease;
+        }
+
+        .legend-area {
+            display: flex;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            color: #666;
+            white-space: nowrap;
+            margin-right: 28px;
+            margin-bottom: 16px;
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        /* --- 热力图专属样式 --- */
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 4px;
+            margin-top: 24px;
+            margin-bottom: 24px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .heat-block {
+            padding-top: 100%;
+            border-radius: 4px;
+            background: #e2e8f0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02);
+        }
+
+        .heat-block:hover {
+            transform: scale(1.15);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+            z-index: 2;
+        }
+
+        .heatmap-legend {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                margin-top: 16px;
+            }
+
+            /* 热力图详情弹窗样式 */
+            .modal-overlay {
+                position: fixed;
+                top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0, 0, 0, 0.2);
+                backdrop-filter: blur(4px);
+                display: none;
+                justify-content: center;
+                align-items: center;
+                z-index: 9999;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+            .modal-overlay.show {
+                display: flex;
+                opacity: 1;
+            }
+            .modal-content {
+                background: rgba(255, 255, 255, 0.85);
+                backdrop-filter: blur(20px) saturate(125%);
+                border: 1px solid rgba(255, 255, 255, 1);
+                border-radius: 16px;
+                padding: 32px;
+                width: 960px; /* 进一步加宽，为了容纳全键盘和鼠标 */
+                box-shadow: 0 24px 48px rgba(0, 0, 0, 0.15);
+                transform: translateY(20px);
+                transition: transform 0.3s ease, width 0.3s ease;
+            }
+            .modal-overlay.show .modal-content {
+                transform: translateY(0);
+            }
+            @keyframes slideNext {
+                0% { transform: translateX(30px); opacity: 0; }
+                100% { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slidePrev {
+                0% { transform: translateX(-30px); opacity: 0; }
+                100% { transform: translateX(0); opacity: 1; }
+            }
+            /* 动画降速：从 0.3s 延长至 0.5s 获得更柔和的阻尼感 */
+            .slide-next-anim { animation: slideNext 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+            .slide-prev-anim { animation: slidePrev 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+            
+            /* 悬浮圆形切换按钮 - 苹果高级感重绘版 */
+            .modal-nav-btn {
+                position: absolute;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 44px;
+                height: 44px;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.95);
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                backdrop-filter: blur(12px);
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                cursor: pointer;
+                color: #555;
+                transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+                z-index: 100; /* 拔高层级，防止被内容遮挡 */
+            }
+            .modal-nav-btn svg { transition: transform 0.2s ease; }
+            .modal-nav-btn.left:hover svg { transform: translateX(-2px); }
+            .modal-nav-btn.right:hover svg { transform: translateX(2px); }
+            .modal-nav-btn:hover { background: #fff; color: #1a1a1a; transform: translateY(-50%) scale(1.08); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); border-color: rgba(0, 0, 0, 0.12); }
+            .modal-nav-btn:active { transform: translateY(-50%) scale(0.95); }
+            /* 往卡片内部收拢，安全停留在内侧边缘，绝不超出窗口 */
+            .modal-nav-btn.left { left: 16px; }
+            .modal-nav-btn.right { right: 16px; }
+
+            .modal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 24px;
+            }
+            .modal-title {
+                font-size: 18px;
+                font-weight: 600;
+                color: #1a1a1a;
+            }
+            .modal-close {
+                cursor: pointer;
+                font-size: 24px;
+                line-height: 1;
+                color: #888;
+                transition: color 0.2s;
+            }
+            .modal-close:hover { color: #333; }
+            
+            /* 客观外设热力图的专属布局 */
+            .hardware-wrapper {
+                display: flex;
+                align-items: stretch;
+            }
+            
+            /* 键盘区样式 */
+            .kb-container {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                background: rgba(240, 242, 245, 0.6);
+                padding: 16px;
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.8);
+                margin-right: 20px;
+            }
+            .kb-row {
+                display: flex;
+                width: 100%;
+                margin-bottom: 4px;
+            }
+            .kb-key {
+                height: 38px; /* 稍微调低高度让整体更紧凑 */
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-size: 12px;
+                font-weight: 600;
+                border-radius: 4px;
+                border: 1px solid transparent; /* 隐去黑边，同时保留占位防止排版抖动 */
+                box-shadow: 0 1px 2px rgba(0,0,0,0.05), inset 0 1px 1px rgba(255,255,255,0.4);
+                transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); 
+                background-color: rgba(0,0,0,0.03); 
+                white-space: nowrap;
+                overflow: hidden;
+                cursor: default; 
+                margin-right: 4px;
+            }
+            
+            /* 调整：将放大比例降低到 1.05，既有动效，又绝不遮挡左右按键 */
+            .kb-key:not(.gap):hover {
+                transform: scale(1.05) translateY(-3px); 
+                box-shadow: 0 8px 16px rgba(0,0,0,0.12), inset 0 2px 4px rgba(255,255,255,0.8);
+                z-index: 10; 
+            }
+
+            /* 新增：点击按键时的真实下压阻尼感 */
+            .kb-key:not(.gap):active {
+                transform: scale(0.96) translateY(1px); 
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1), inset 0 4px 8px rgba(0,0,0,0.1);
+                transition: all 0.1s ease; /* 点击下去的反应要快 */
+            }
+
+            /* 用来占位的透明缝隙按键 */
+            .kb-key.gap {
+                background: transparent;
+                box-shadow: none;
+                pointer-events: none;
+            }
+
+            /* 鼠标区样式 */
+            .mouse-container {
+                width: 160px;
+                background: rgba(240, 242, 245, 0.6);
+                padding: 16px;
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.8);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+            }
+            .mouse-title {
+                font-size: 14px;
+                font-weight: 600;
+                color: #555;
+                margin-bottom: 16px;
+            }
+            .mouse-body {
+                width: 70px;
+                height: 110px;
+                border-radius: 35px 35px 40px 40px;
+                background: #f8f9fa;
+                border: 2px solid #e0e0e0;
+                position: relative;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.05), inset 0 -4px 10px rgba(0,0,0,0.02);
+                display: flex;
+                justify-content: center;
+                margin-bottom: 16px;
+            }
+            .mouse-btn-left, .mouse-btn-right {
+                position: absolute;
+                top: 0;
+                width: 48%;
+                height: 45px;
+                background: rgba(0,0,0,0.03);
+                transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); /* 加入灵动曲线 */
+                cursor: default;
+            }
+            .mouse-btn-left {
+                left: 0;
+                border-radius: 35px 0 0 0;
+                border-right: 1px solid #e0e0e0;
+                border-bottom: 1px solid #e0e0e0;
+                transform-origin: bottom right; /* 让放大有个抓地感 */
+            }
+            .mouse-btn-right {
+                right: 0;
+                border-radius: 0 35px 0 0;
+                border-left: 1px solid #e0e0e0;
+                border-bottom: 1px solid #e0e0e0;
+                transform-origin: bottom left;
+            }
+            /* 鼠标左右键悬浮动画 */
+            .mouse-btn-left:hover, .mouse-btn-right:hover {
+                transform: scale(1.05) translateY(-2px);
+                box-shadow: 0 8px 16px rgba(0,0,0,0.12), inset 0 2px 4px rgba(255,255,255,0.8);
+                z-index: 10;
+            }
+            /* 鼠标左右键点击动画 */
+            .mouse-btn-left:active, .mouse-btn-right:active {
+                transform: scale(0.96) translateY(1px);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1), inset 0 4px 8px rgba(0,0,0,0.1);
+                transition: all 0.1s ease;
+            }
+            .mouse-wheel {
+                position: absolute;
+                top: 15px;
+                width: 8px;
+                height: 22px;
+                border-radius: 4px;
+                background: #ccc;
+                z-index: 12;
+                box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+                transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+                cursor: default;
+            }
+            /* 鼠标滚轮悬浮与点击动画 */
+            .mouse-wheel:hover {
+                transform: scale(1.15) translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            }
+            .mouse-wheel:active {
+                transform: scale(0.9) translateY(1px);
+                transition: all 0.1s ease;
+            }
+            .mouse-stats {
+                font-size: 13px;
+                color: #666;
+                text-align: center;
+                line-height: 1.8;
+            }
+            .mouse-stats span {
+                font-weight: bold;
+                color: #1a1a1a;
+            }
+            
+            /* --- 新增：胶囊主题商店弹窗样式 --- */
+            .theme-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 20px;
+                padding: 10px;
+            }
+            .theme-card {
+                background: rgba(240, 242, 245, 0.4);
+                border: 2px solid transparent;
+                border-radius: 12px;
+                padding: 24px 16px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            .theme-card:hover {
+                background: rgba(240, 242, 245, 0.8);
+                transform: translateY(-2px);
+            }
+            .theme-card.active {
+                border-color: #4a8df5;
+                background: rgba(74, 141, 245, 0.05);
+                box-shadow: 0 8px 16px rgba(74, 141, 245, 0.15);
+            }
+            .capsule-mock {
+                width: 120px;
+                height: 40px;
+                border-radius: 20px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-family: "-apple-system", sans-serif;
+                font-size: 16px;
+                font-weight: 600;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+                margin-bottom: 16px;
+                border: 1px solid rgba(0,0,0,0.05);
+            }
+            .theme-name {
+                font-size: 13px;
+                color: #555;
+                font-weight: 600;
+            }
+            
+            </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <div class="window">
+        <nav class="sidebar">
+            <div class="brand">
+                <div class="brand-icon"></div>
+                KeyMind
+            </div>
+            <div class="nav-list">
+                <div class="nav-item active" onclick="switchTab('dashboard', this)">实时看板</div>
+                <div class="nav-item" onclick="switchTab('analysis', this)">深度分析</div>
+                <div class="nav-item" onclick="switchTab('history', this)">历史记录</div>
+                <div class="nav-item" onclick="switchTab('heatmap', this)">🔥 输入热力图</div>
+                <div class="nav-item" style="margin-top: 20px;" onclick="switchTab('settings', this)">⚙️ 系统设置</div>
+            </div>
+            <div class="version-info">版本：1.0.0 (本地运行)</div>
+        </nav>
+
+        <main class="content">
+            <div id="tab-dashboard" class="tab-pane active">
+                <div class="page-header">
+                    <h1 class="page-title" id="page-title-text">今日概览</h1>
+                </div>
+
+                <div class="grid-container">
+                    <div class="card card-large">
+                        <div class="card-title">⌨️ 今日总击键 (次)</div>
+                        <div class="number-huge" id="total-count" style="color: #1a1a1a; font-size: 52px; margin-top: 20px; margin-bottom: 28px;">12,450</div>
+                        <div class="insight-box" style="border: none; padding-top: 0;">
+                            <div class="insight-text" style="display: inline-flex; align-items: center; background: rgba(0, 0, 0, 0.04); color: #444444; padding: 10px 16px; border-radius: 8px; margin-bottom: 0;">🔥 键盘正在冒烟，你的手指今天仿佛装了 V8 引擎！</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">🌊 最长专注心流</div>
+                        <div class="number-normal">42<span class="unit">分钟</span></div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">⚡ 今日峰值时段</div>
+                        <div class="number-normal">14:00 - 16:00</div>
+                        <div class="insight-box">
+                            <div class="insight-text">☀️ 午后是你思维最活跃的时刻。</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="hotkey-bar">
+                    <div class="hotkey-label">今日高频键位</div>
+                    <div class="hotkey-list">
+                        <div class="key-tag">暂无记录 <span class="key-count">0</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-analysis" class="tab-pane">
+                <div class="page-header">
+                    <h1 class="page-title">今日输入</h1>
+                </div>
+
+                <div class="grid-container">
+                    <div class="card card-full">
+                        <div class="card-title" style="font-size: 16px; font-weight: 600; color: #333; display: flex; align-items: center; gap: 8px;">📊 按键类型统计</div>
+                        
+                        <div class="composition-bar">
+                            <div class="comp-segment" style="width: 0%; background: #86aef4;"></div>
+                            <div class="comp-segment" style="width: 0%; background: #ab92f4;"></div>
+                            <div class="comp-segment" style="width: 0%; background: #fad28c;"></div>
+                            <div class="comp-segment" style="width: 0%; background: #e0e0e0;"></div>
+                        </div>
+                        
+                        <div class="legend-area">
+                            <div class="legend-item"><div class="legend-dot" style="background: #86aef4;"></div>字母文字 0%</div>
+                            <div class="legend-item"><div class="legend-dot" style="background: #ab92f4;"></div>符号数字 0%</div>
+                            <div class="legend-item"><div class="legend-dot" style="background: #fad28c;"></div>退格删除 0%</div>
+                            <div class="legend-item"><div class="legend-dot" style="background: #e0e0e0;"></div>功能控制 0%</div>
+                        </div>
+
+                        <div class="insight-box">
+                            <div class="insight-text">💡 字母占比极高，且控制键使用极少，你当前处于极其流畅的“沉浸式倾诉”状态。</div>
+                        </div>
+                    </div>
+
+                    <div class="card card-full">
+                        <div class="card-title" style="font-size: 16px; font-weight: 600; color: #333; display: flex; align-items: center; gap: 8px;">📈 今日输入趋势</div>
+                        <div class="chart-container" style="position: relative; height: 180px; width: 100%; margin-top: 10px;">
+                            <canvas id="trendChart" width="470" height="180"></canvas>
+                            <div id="chartTooltip" style="position: absolute; display: none; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 1); color: #333; padding: 12px 16px; border-radius: 8px; pointer-events: none; transform: translate(-50%, -100%); margin-top: -15px; white-space: nowrap; z-index: 10; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); transition: top 0.1s ease, left 0.1s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="tab-history" class="tab-pane">
+                <div class="page-header">
+                    <h1 class="page-title">历史概览</h1>
+                </div>
+
+                <div class="grid-container">
+                    <div class="card">
+                        <div class="card-title">🏆 累计总击键 (次)</div>
+                        <div style="display: flex; align-items: baseline;">
+                            <div class="number-normal" id="history-total">0</div>
+                            <div id="user-level-badge" style="margin-left: 12px; padding: 4px 12px; background: rgba(74, 141, 245, 0.08); color: #4a8df5; border: 1px solid rgba(74, 141, 245, 0.2); font-size: 12px; font-weight: 700; border-radius: 14px; white-space: nowrap; letter-spacing: 0.5px; box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5);">Lv.1 初出茅庐</div>
+                        </div>
+                        <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; color: #888; font-weight: 600;">
+                                <span>升级进度</span>
+                                <span id="exp-progress-text">0 / 0</span>
+                            </div>
+                            <div style="height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden; position: relative;">
+                                <div id="exp-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
+                            </div>
+                        </div>
+                        <div class="insight-box">
+                            <div class="insight-text" id="level-insight-text">✨ 你的键盘已经历了无数次敲击，继续打怪升级吧！</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">🔥 最高单日记录</div>
+                        <div class="number-normal" id="history-max">0</div>
+                        <div class="insight-box">
+                            <div class="insight-text" id="history-max-date">📅 创造于 -</div>
+                        </div>
+                    </div>
+
+                    <div class="card card-full">
+                        <div class="card-title" style="font-size: 16px; font-weight: 600; color: #333; display: flex; align-items: center; gap: 8px;">🗓️ 近 7 天输入趋势</div>
+                        <div class="chart-container" style="position: relative; height: 180px; width: 100%; margin-top: 10px;">
+                            <canvas id="historyChart"></canvas>
+                            <div id="historyTooltip" style="position: absolute; display: none; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 1); color: #333; padding: 12px 16px; border-radius: 8px; pointer-events: none; transform: translate(-50%, -100%); margin-top: -15px; white-space: nowrap; z-index: 10; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); transition: top 0.1s ease, left 0.1s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+<div id="tab-heatmap" class="tab-pane">
+                <div class="page-header">
+                    <h1 class="page-title">输入热力图</h1>
+                </div>
+                <div class="grid-container">
+                    <div class="card card-full" style="position: relative;">
+                        <div class="card-title" style="font-size: 16px; font-weight: 600; color: #333; display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 8px;">🕰️ 24小时行为轨迹</div>
+                            <div id="btn-wholeday-heatmap" style="padding: 6px 16px; background: linear-gradient(135deg, #ff6b6b 0%, #ef4444 100%); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.3); transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);" onmouseover="this.style.background='linear-gradient(135deg, #fa5252 0%, #dc2626 100%)'; this.style.boxShadow='0 6px 16px rgba(239, 68, 68, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.2)'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='linear-gradient(135deg, #ff6b6b 0%, #ef4444 100%)'; this.style.boxShadow='0 4px 12px rgba(239, 68, 68, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.3)'; this.style.transform='none';">🔥 全天总热力图</div>
+                        </div>
+                        <div class="insight-text" style="margin-bottom: 10px;">通过分析键位特征，智能推测你在每个时间段的主要活动。</div>
+                        
+                        <div class="heatmap-grid" id="heatmap-container">
+                            </div>
+                        
+                        <div class="heatmap-legend">
+                            <div class="legend-item"><div class="legend-dot" style="background: rgba(239, 68, 68, 0.7);"></div>激战游戏</div>
+                            <div class="legend-item"><div class="legend-dot" style="background: rgba(16, 185, 129, 0.7);"></div>沉浸编程</div>
+                            <div class="legend-item"><div class="legend-dot" style="background: rgba(59, 130, 246, 0.7);"></div>高速码字</div>
+                            <div class="legend-item"><div class="legend-dot" style="background: rgba(6, 182, 212, 0.7);"></div>设计创作</div>
+                            <div class="legend-item"><div class="legend-dot" style="background: rgba(236, 72, 153, 0.7);"></div>碎片沟通</div>
+                            <div class="legend-item"><div class="legend-dot" style="background: rgba(245, 158, 11, 0.7);"></div>影视影音</div>
+                            <div class="legend-item"><div class="legend-dot" style="background: rgba(168, 85, 247, 0.7);"></div>轻松阅读</div>
+                            <div class="legend-item"><div class="legend-dot" style="background: #e2e8f0;"></div>键盘待机</div>
+                        </div>
+
+                        <div id="heatmapTooltip" style="position: absolute; display: none; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.8); padding: 14px 18px; border-radius: 10px; pointer-events: none; white-space: nowrap; z-index: 10; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); transition: opacity 0.2s ease;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-settings" class="tab-pane">
+                <div class="page-header">
+                    <h1 class="page-title">系统设置</h1>
+                </div>
+                <div class="grid-container" style="display: flex; flex-direction: column; padding-top: 10px; padding-right: 0; padding-bottom: 20px;">
+                    
+                    <div class="card card-full" style="margin-bottom: 20px;">
+                        <div class="card-title" style="font-size: 16px; font-weight: 600; color: #1a1a1a; display: flex; align-items: center; gap: 8px;">🎨 胶囊主题色</div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; position: relative;">
+                            <div style="position: absolute; bottom: 0; left: 10%; right: 10%; height: 1px; background: rgba(0,0,0,0.04);"></div>
+                            <div>
+                                <div style="font-size: 15px; color: #1a1a1a; font-weight: 600;">✨ 外观颜色</div>
+                                <div style="font-size: 13px; color: #888; margin-top: 6px;">融合苹果美学的低饱和度高级配色</div>
+                            </div>
+                            <div style="padding: 8px 18px; background: #4a8df5; border-radius: 6px; font-size: 13px; font-weight: 600; color: #fff; cursor: pointer; box-shadow: 0 2px 6px rgba(74, 141, 245, 0.3); transition: all 0.2s ease;" onmouseover="this.style.background='#3b7de4'; this.style.transform='translateY(-1px)';" onmouseout="this.style.background='#4a8df5'; this.style.transform='none';" onclick="document.getElementById('themeModal').style.display='flex'; setTimeout(()=>document.getElementById('themeModal').classList.add('show'), 10);">
+                                🎨 选择胶囊外观
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0;">
+                            <div>
+                                <div style="font-size: 15px; color: #1a1a1a; font-weight: 600;">🌈 动态心流发光</div>
+                                <div style="font-size: 13px; color: #888; margin-top: 6px;">随今日敲击量加深胶囊背景，直观感知生产力热度</div>
+                            </div>
+                            <div style="display: flex; align-items: center;">
+                                <div style="padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; color: #555; background: #f0f2f5; cursor: pointer; transition: all 0.2s; margin-right: 16px;" onmouseover="this.style.background='#e4e6e9'" onmouseout="this.style.background='#f0f2f5'" onclick="openDIYModal()">
+                                    ⚙️ 阈值配置
+                                </div>
+                                <div data-state="off" id="dynamic-color-toggle" style="width: 48px; height: 26px; background: #e0e0e0; border-radius: 13px; position: relative; cursor: pointer; transition: background 0.3s ease;" onclick="var newState = this.dataset.state === 'on' ? 'off' : 'on'; this.dataset.state = newState; this.style.background = newState === 'on' ? '#4a8df5' : '#e0e0e0'; this.children[0].style.left = newState === 'on' ? '24px' : '2px'; if(newState === 'on'){ const p = document.getElementById('theme-color-picker'); if(p){ Array.from(p.querySelectorAll('.theme-card')).forEach(c => c.classList.remove('active')); } } if(typeof backend !== 'undefined' && backend) { backend.set_dynamic_color(newState === 'on'); }">
+                                    <div style="width: 22px; height: 22px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 2px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: left 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card card-full" style="margin-bottom: 20px;">
+                        <div class="card-title" style="font-size: 16px; font-weight: 600; color: #1a1a1a; display: flex; align-items: center; gap: 8px;">⚙️ 常规偏好</div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; position: relative;">
+                            <div style="position: absolute; bottom: 0; left: 10%; right: 10%; height: 1px; background: rgba(0,0,0,0.04);"></div>
+                            <div>
+                                <div style="font-size: 15px; color: #1a1a1a; font-weight: 600;">🚀 开机自动启动</div>
+                                <div id="autostart-desc" style="font-size: 13px; color: #888; margin-top: 6px; transition: color 0.3s;">系统登录后自动在后台默默守护你的每一次敲击</div>
+                            </div>
+                            <div data-state="on" style="width: 48px; height: 26px; background: #4a8df5; border-radius: 13px; position: relative; cursor: pointer; transition: background 0.3s ease;" onclick="var newState = this.dataset.state === 'on' ? 'off' : 'on'; this.dataset.state = newState; this.style.background = newState === 'on' ? '#4a8df5' : '#e0e0e0'; this.children[0].style.left = newState === 'on' ? '24px' : '2px'; if(typeof backend !== 'undefined' && backend) { backend.set_auto_start(newState === 'on'); } var desc = document.getElementById('autostart-desc'); desc.innerText = newState === 'on' ? '✅ 已成功写入系统注册表，下次开机生效！' : '🛑 已从系统注册表中移除！'; desc.style.color = newState === 'on' ? '#10b981' : '#ef4444'; setTimeout(function() { desc.innerText = '系统登录后自动在后台默默守护你的每一次敲击'; desc.style.color = '#888'; }, 2500);">
+                                <div style="width: 22px; height: 22px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 24px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: left 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; position: relative;">
+                            <div style="position: absolute; bottom: 0; left: 10%; right: 10%; height: 1px; background: rgba(0,0,0,0.04);"></div>
+                            <div>
+                                <div style="font-size: 15px; color: #1a1a1a; font-weight: 600;">⬇️ 关闭胶囊时隐藏至托盘</div>
+                                <div style="font-size: 13px; color: #888; margin-top: 6px;">点击胶囊左侧按钮时，将程序隐藏至右下角系统托盘默默运行</div>
+                            </div>
+                            <div data-state="on" id="hide-capsule-toggle" style="width: 48px; height: 26px; background: #4a8df5; border-radius: 13px; position: relative; cursor: pointer; transition: background 0.3s ease;" onclick="var newState = this.dataset.state === 'on' ? 'off' : 'on'; this.dataset.state = newState; this.style.background = newState === 'on' ? '#4a8df5' : '#e0e0e0'; this.children[0].style.left = newState === 'on' ? '24px' : '2px'; if(typeof backend !== 'undefined' && backend) { backend.set_hide_on_close(newState === 'on'); }">
+                                <div style="width: 22px; height: 22px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 24px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: left 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; position: relative;">
+                            <div style="position: absolute; bottom: 0; left: 10%; right: 10%; height: 1px; background: rgba(0,0,0,0.04);"></div>
+                            <div>
+                                <div style="font-size: 15px; color: #1a1a1a; font-weight: 600;">👁️ 实时按键悬浮窗</div>
+                                <div style="font-size: 13px; color: #888; margin-top: 6px;">在屏幕显示按下的键位，鼠标悬停时可长久停留并拖拽调整位置</div>
+                            </div>
+                            <div data-state="on" id="osd-toggle" style="width: 48px; height: 26px; background: #4a8df5; border-radius: 13px; position: relative; cursor: pointer; transition: background 0.3s ease;" onclick="var newState = this.dataset.state === 'on' ? 'off' : 'on'; this.dataset.state = newState; this.style.background = newState === 'on' ? '#4a8df5' : '#e0e0e0'; this.children[0].style.left = newState === 'on' ? '24px' : '2px'; if(typeof backend !== 'undefined' && backend) { backend.set_osd_enabled(newState === 'on'); }">
+                                <div style="width: 22px; height: 22px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 24px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: left 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; position: relative;">
+                            <div style="position: absolute; bottom: 0; left: 10%; right: 10%; height: 1px; background: rgba(0,0,0,0.04);"></div>
+                            <div>
+                                <div style="font-size: 15px; color: #1a1a1a; font-weight: 600;">🎉 晋级庆祝弹窗</div>
+                                <div style="font-size: 13px; color: #888; margin-top: 6px;">达到指定敲击量升级时，在屏幕右下角弹出庆祝动效</div>
+                            </div>
+                            <div data-state="on" id="level-osd-toggle" style="width: 48px; height: 26px; background: #4a8df5; border-radius: 13px; position: relative; cursor: pointer; transition: background 0.3s ease;" onclick="var newState = this.dataset.state === 'on' ? 'off' : 'on'; this.dataset.state = newState; this.style.background = newState === 'on' ? '#4a8df5' : '#e0e0e0'; this.children[0].style.left = newState === 'on' ? '24px' : '2px'; if(typeof backend !== 'undefined' && backend && backend.set_level_osd_enabled) { backend.set_level_osd_enabled(newState === 'on'); } if(newState === 'off') { var st = document.getElementById('level-sound-toggle'); if(st && st.dataset.state === 'on') { st.dataset.state = 'off'; st.style.background = '#e0e0e0'; st.children[0].style.left = '2px'; if(typeof backend !== 'undefined' && backend && backend.set_level_sound_enabled) { backend.set_level_sound_enabled(false); } } }">
+                                <div style="width: 22px; height: 22px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 24px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: left 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0;">
+                            <div>
+                                <div style="font-size: 15px; color: #1a1a1a; font-weight: 600;">🎵 晋级弹窗音效</div>
+                                <div style="font-size: 13px; color: #888; margin-top: 6px;">触发晋级时播放专属庆祝音效</div>
+                            </div>
+                            <div data-state="on" id="level-sound-toggle" style="width: 48px; height: 26px; background: #4a8df5; border-radius: 13px; position: relative; cursor: pointer; transition: background 0.3s ease;" onclick="var newState = this.dataset.state === 'on' ? 'off' : 'on'; this.dataset.state = newState; this.style.background = newState === 'on' ? '#4a8df5' : '#e0e0e0'; this.children[0].style.left = newState === 'on' ? '24px' : '2px'; if(typeof backend !== 'undefined' && backend && backend.set_level_sound_enabled) { backend.set_level_sound_enabled(newState === 'on'); } if(newState === 'on') { var ot = document.getElementById('level-osd-toggle'); if(ot && ot.dataset.state === 'off') { ot.dataset.state = 'on'; ot.style.background = '#4a8df5'; ot.children[0].style.left = '24px'; if(typeof backend !== 'undefined' && backend && backend.set_level_osd_enabled) { backend.set_level_osd_enabled(true); } } }">
+                                <div style="width: 22px; height: 22px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 24px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: left 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card card-full">
+                        <div class="card-title" style="font-size: 16px; font-weight: 600; color: #1a1a1a; display: flex; align-items: center; gap: 8px;">🔒 数据与隐私</div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; position: relative;">
+                            <div style="position: absolute; bottom: 0; left: 10%; right: 10%; height: 1px; background: rgba(0,0,0,0.04);"></div>
+                            <div>
+                                <div style="font-size: 15px; color: #1a1a1a; font-weight: 600;">⏳ 数据保留期限</div>
+                                <div style="font-size: 13px; color: #888; margin-top: 6px;">自动清理过于久远的历史数据，保持软件轻量运行</div>
+                            </div>
+                            <div style="position: relative; display: inline-block; width: 125px; outline: none;" tabindex="0" onblur="this.querySelector('.custom-options').style.opacity='0'; this.querySelector('.custom-options').style.pointerEvents='none'; this.querySelector('.custom-options').style.transform='scaleY(0.9)'; this.querySelector('.arrow').style.transform='translateY(-50%) rotate(0deg)'">
+                                <div style="padding: 8px 28px 8px 18px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; outline: none; background: #ffffff; color: #444; cursor: pointer; font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.02); transition: all 0.2s ease; position: relative;" 
+                                     onmouseover="this.style.background='#f8f9fa'" 
+                                     onmouseout="this.style.background='#ffffff'"
+                                     onclick="const opts = this.nextElementSibling; const isHidden = opts.style.opacity === '0'; opts.style.opacity = isHidden ? '1' : '0'; opts.style.pointerEvents = isHidden ? 'auto' : 'none'; opts.style.transform = isHidden ? 'scaleY(1)' : 'scaleY(0.9)'; this.querySelector('.arrow').style.transform = isHidden ? 'translateY(-50%) rotate(180deg)' : 'translateY(-50%) rotate(0deg)';">
+                                    <span class="selected-text">保留 90 天</span>
+                                    <div class="arrow" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 10px; color: #888; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">▼</div>
+                                </div>
+                                <div class="custom-options" style="opacity: 0; pointer-events: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(24px) saturate(150%); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); overflow: hidden; z-index: 100; padding: 4px; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); transform: scaleY(0.9); transform-origin: top center;">
+                                    <div style="padding: 10px 14px; font-size: 13px; color: #444; cursor: pointer; border-radius: 8px; transition: all 0.2s; font-weight: 500;" 
+                                         onmouseover="this.style.background='rgba(0,0,0,0.04)'; this.style.color='#1a1a1a'" 
+                                         onmouseout="if(this.dataset.selected !== 'true'){this.style.background='transparent'; this.style.color='#444'}" 
+                                         onmousedown="this.parentElement.previousElementSibling.querySelector('.selected-text').innerText=this.innerText; Array.from(this.parentElement.children).forEach(c => {c.style.background='transparent'; c.style.color='#444'; c.style.fontWeight='500'; c.dataset.selected='false'}); this.style.background='rgba(74,141,245,0.08)'; this.style.color='#4a8df5'; this.style.fontWeight='600'; this.dataset.selected='true'; this.parentElement.style.opacity='0'; this.parentElement.style.pointerEvents='none'; this.parentElement.style.transform='scaleY(0.9)'; this.parentElement.previousElementSibling.querySelector('.arrow').style.transform='translateY(-50%) rotate(0deg)'; if(typeof backend !== 'undefined' && backend) { backend.set_retention(30); }">保留 30 天</div>
+                                    <div data-selected="true" style="padding: 10px 14px; font-size: 13px; color: #4a8df5; cursor: pointer; border-radius: 8px; transition: all 0.2s; font-weight: 600; background: rgba(74,141,245,0.08);" 
+                                         onmouseover="this.style.background='rgba(74,141,245,0.15)'" 
+                                         onmouseout="if(this.dataset.selected === 'true'){this.style.background='rgba(74,141,245,0.08)'}" 
+                                         onmousedown="this.parentElement.previousElementSibling.querySelector('.selected-text').innerText=this.innerText; Array.from(this.parentElement.children).forEach(c => {c.style.background='transparent'; c.style.color='#444'; c.style.fontWeight='500'; c.dataset.selected='false'}); this.style.background='rgba(74,141,245,0.08)'; this.style.color='#4a8df5'; this.style.fontWeight='600'; this.dataset.selected='true'; this.parentElement.style.opacity='0'; this.parentElement.style.pointerEvents='none'; this.parentElement.style.transform='scaleY(0.9)'; this.parentElement.previousElementSibling.querySelector('.arrow').style.transform='translateY(-50%) rotate(0deg)'; if(typeof backend !== 'undefined' && backend) { backend.set_retention(90); }">保留 90 天</div>
+                                    <div style="padding: 10px 14px; font-size: 13px; color: #444; cursor: pointer; border-radius: 8px; transition: all 0.2s; font-weight: 500;" 
+                                         onmouseover="this.style.background='rgba(0,0,0,0.04)'; this.style.color='#1a1a1a'" 
+                                         onmouseout="if(this.dataset.selected !== 'true'){this.style.background='transparent'; this.style.color='#444'}" 
+                                         onmousedown="this.parentElement.previousElementSibling.querySelector('.selected-text').innerText=this.innerText; Array.from(this.parentElement.children).forEach(c => {c.style.background='transparent'; c.style.color='#444'; c.style.fontWeight='500'; c.dataset.selected='false'}); this.style.background='rgba(74,141,245,0.08)'; this.style.color='#4a8df5'; this.style.fontWeight='600'; this.dataset.selected='true'; this.parentElement.style.opacity='0'; this.parentElement.style.pointerEvents='none'; this.parentElement.style.transform='scaleY(0.9)'; this.parentElement.previousElementSibling.querySelector('.arrow').style.transform='translateY(-50%) rotate(0deg)'; if(typeof backend !== 'undefined' && backend) { backend.set_retention(180); }">保留 180 天</div>
+                                    <div style="padding: 10px 14px; font-size: 13px; color: #444; cursor: pointer; border-radius: 8px; transition: all 0.2s; font-weight: 500;" 
+                                         onmouseover="this.style.background='rgba(0,0,0,0.04)'; this.style.color='#1a1a1a'" 
+                                         onmouseout="if(this.dataset.selected !== 'true'){this.style.background='transparent'; this.style.color='#444'}" 
+                                         onmousedown="this.parentElement.previousElementSibling.querySelector('.selected-text').innerText=this.innerText; Array.from(this.parentElement.children).forEach(c => {c.style.background='transparent'; c.style.color='#444'; c.style.fontWeight='500'; c.dataset.selected='false'}); this.style.background='rgba(74,141,245,0.08)'; this.style.color='#4a8df5'; this.style.fontWeight='600'; this.dataset.selected='true'; this.parentElement.style.opacity='0'; this.parentElement.style.pointerEvents='none'; this.parentElement.style.transform='scaleY(0.9)'; this.parentElement.previousElementSibling.querySelector('.arrow').style.transform='translateY(-50%) rotate(0deg)'; if(typeof backend !== 'undefined' && backend) { backend.set_retention(0); }">永久保留</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; position: relative;">
+                            <div style="position: absolute; bottom: 0; left: 10%; right: 10%; height: 1px; background: rgba(0,0,0,0.04);"></div>
+                            <div>
+                                <div style="font-size: 15px; color: #1a1a1a; font-weight: 600;">📦 导出所有本地数据</div>
+                                <div style="font-size: 13px; color: #888; margin-top: 6px;">将你的全量历史数据导出为 JSON 备份文件，支持随时导入恢复</div>
+                            </div>
+                            <div style="padding: 8px 18px; background: #ffffff; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 13px; font-weight: 600; color: #444; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.02); transition: all 0.2s ease;" onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='#ffffff'" onclick="if(backend){backend.export_json();}else{alert('后端通信桥接未就绪');}">
+                                立即导出
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; position: relative;">
+                            <div style="position: absolute; bottom: 0; left: 10%; right: 10%; height: 1px; background: rgba(0,0,0,0.04);"></div>
+                            <div>
+                                <div style="font-size: 15px; color: #1a1a1a; font-weight: 600;">📥 导入外部数据</div>
+                                <div style="font-size: 13px; color: #888; margin-top: 6px;">导入旧设备的 count_record.json 文件进行历史数据合并</div>
+                            </div>
+                            <div style="padding: 8px 18px; background: #ffffff; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 13px; font-weight: 600; color: #444; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.02); transition: all 0.2s ease;" onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='#ffffff'" onclick="if(backend){backend.import_data();}else{alert('后端通信桥接未就绪');}">
+                                选择文件
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0;">
+                            <div>
+                                <div style="font-size: 15px; color: #dc2626; font-weight: 600;">🗑️ 清除所有数据</div>
+                                <div style="font-size: 13px; color: #888; margin-top: 6px;">将彻底抹除所有历史输入记录，此操作不可逆转</div>
+                            </div>
+                            <div style="padding: 8px 18px; background: #fee2e2; border: 1px solid rgba(220,38,38,0.2); border-radius: 6px; font-size: 13px; font-weight: 600; color: #dc2626; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.02); transition: all 0.2s ease;" onmouseover="this.style.background='#fca5a5'; this.style.color='#991b1b';" onmouseout="this.style.background='#fee2e2'; this.style.color='#dc2626';" onclick="document.getElementById('confirmClearModal').style.display='flex'; setTimeout(()=>document.getElementById('confirmClearModal').classList.add('show'), 10);">
+                                彻底清除
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+
+            <div class="modal-overlay" id="themeModal" onclick="closeModal(event)" style="z-index: 10005;">
+                <div class="modal-content" style="width: 420px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 32px 64px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
+                    <div class="modal-header" style="flex-shrink: 0;">
+                        <div class="modal-title">胶囊外观商店 (53款专属主题)</div>
+                        <div class="modal-close" onclick="closeModal(event)">×</div>
+                    </div>
+                    <div class="modal-body" id="theme-color-picker" style="overflow-y: auto; padding-right: 10px; margin-right: -10px;">
+                        <div class="theme-grid" id="theme-grid-container">
+                            </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                // 立即注入 53 款特工涂装 (包含分色硬截断新样式与专属命名)
+                (function() {
+                    const names = [
+                        "霜白", "珍珠", "云水", "雾凇", "丁香", "蜜桃", "青空", "薄荷", "香芋", "流沙",
+                        "深海", "翡翠", "烈阳", "元气", "枫叶", "霓虹", "芭比", "极地", "新绿", "松石",
+                        "暗夜", "深渊", "碳纤维", "陨石", "太空银", "黑曜石", "钛金", "枪灰", "银河", "纯黑",
+                        "晨曦初露", "春日融雪", "紫霞仙子", "粉色回忆", "梦幻星云", "极光守望", "天际巡航", "落日余晖", "冰川时代", "雪原之歌",
+                        "赛尔号", "幻影突击", "赛博朋克", "绝对零度", "迈阿密", "暗影武士", "液态金属", "致命毒液", "猛男粉晶", "深空浩劫",
+                        "急救实体胶囊", "赤火精灵球", "深海大师球"
+                    ];
+
+                    const colors = [
+                        "rgba(255, 255, 255, 0.95)", "rgba(248, 244, 238, 0.95)", "rgba(224, 235, 245, 0.95)", "rgba(227, 236, 230, 0.95)", "rgba(235, 230, 240, 0.95)", 
+                        "rgba(255, 170, 181, 0.95)", "rgba(126, 214, 253, 0.95)", "rgba(134, 239, 172, 0.95)", "rgba(216, 180, 254, 0.95)", "rgba(253, 224, 71, 0.95)",
+                        "rgba(59, 130, 246, 0.95)", "rgba(16, 185, 129, 0.95)", "rgba(234, 179, 8, 0.95)", "rgba(249, 115, 22, 0.95)", "rgba(239, 68, 68, 0.95)", 
+                        "rgba(168, 85, 247, 0.95)", "rgba(236, 72, 153, 0.95)", "rgba(6, 182, 212, 0.95)", "rgba(132, 204, 22, 0.95)", "rgba(20, 184, 166, 0.95)",
+                        "rgba(30, 30, 30, 0.95)", "rgba(55, 65, 81, 0.95)", "rgba(75, 85, 99, 0.95)", "rgba(156, 163, 175, 0.95)", "rgba(209, 213, 219, 0.95)", 
+                        "rgba(39, 39, 42, 0.95)", "rgba(63, 63, 70, 0.95)", "rgba(82, 82, 91, 0.95)", "rgba(161, 161, 170, 0.95)", "rgba(23, 23, 23, 0.95)",
+                        { css: "linear-gradient(135deg, #f6d365 0%, #fda085 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f6d365, stop:1 #fda085)" },
+                        { css: "linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #84fab0, stop:1 #8fd3f4)" },
+                        { css: "linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #a18cd1, stop:1 #fbc2eb)" },
+                        { css: "linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ff9a9e, stop:1 #fecfef)" },
+                        { css: "linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #fbc2eb, stop:1 #a6c1ee)" },
+                        { css: "linear-gradient(135deg, #fdcbf1 0%, #e6dee9 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #fdcbf1, stop:1 #e6dee9)" },
+                        { css: "linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #a1c4fd, stop:1 #c2e9fb)" },
+                        { css: "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ffecd2, stop:1 #fcb69f)" },
+                        { css: "linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #cfd9df, stop:1 #e2ebf0)" },
+                        { css: "linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #fdfbfb, stop:1 #ebedee)" },
+                        
+                        // === 修复：重铸赛尔号涂装，采用左橘红右海蓝的硬截断胶囊拼接设计 ===
+                        { css: "linear-gradient(90deg, #f97316 35%, #ffffff 35%, #ffffff 65%, #3b82f6 65%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #f97316, stop:0.35 #f97316, stop:0.351 #ffffff, stop:0.65 #ffffff, stop:0.651 #3b82f6, stop:1 #3b82f6)" },
+                        
+                        { css: "linear-gradient(90deg, #3b82f6 0%, #ffffff 50%, #ef4444 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3b82f6, stop:0.5 #ffffff, stop:1 #ef4444)" },
+                        { css: "linear-gradient(45deg, #ff00cc, #333399)", qss: "qlineargradient(x1:0, y1:1, x2:1, y2:0, stop:0 #ff00cc, stop:1 #333399)" },
+                        { css: "linear-gradient(45deg, #00f2fe 0%, #4facfe 100%)", qss: "qlineargradient(x1:0, y1:1, x2:1, y2:0, stop:0 #00f2fe, stop:1 #4facfe)" },
+                        { css: "linear-gradient(45deg, #fa709a 0%, #fee140 100%)", qss: "qlineargradient(x1:0, y1:1, x2:1, y2:0, stop:0 #fa709a, stop:1 #fee140)" },
+                        { css: "linear-gradient(to right, #434343 0%, black 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #434343, stop:1 black)" },
+                        { css: "linear-gradient(to right, #b8c6db 0%, #f5f7fa 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #b8c6db, stop:1 #f5f7fa)" },
+                        { css: "linear-gradient(to right, #0ba360 0%, #3cba92 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0ba360, stop:1 #3cba92)" },
+                        { css: "linear-gradient(to right, #ff758c 0%, #ff7eb3 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ff758c, stop:1 #ff7eb3)" },
+                        { css: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #667eea, stop:1 #764ba2)" },
+                        
+                        // === 修复：3 款实体/精灵球硬截断拼接样式 (注入 0.001 偏移量修复白光 Bug) ===
+                        { css: "linear-gradient(90deg, #f97316 50%, #ea580c 50%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #f97316, stop:0.5 #f97316, stop:0.501 #ea580c, stop:1 #ea580c)" },
+                        { css: "linear-gradient(90deg, #ef4444 35%, #ffffff 35%, #ffffff 65%, #ef4444 65%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ef4444, stop:0.35 #ef4444, stop:0.351 #ffffff, stop:0.65 #ffffff, stop:0.651 #ef4444, stop:1 #ef4444)" },
+                        { css: "linear-gradient(90deg, #1e3a8a 35%, #ffffff 35%, #ffffff 65%, #1e3a8a 65%)", qss: "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1e3a8a, stop:0.35 #1e3a8a, stop:0.351 #ffffff, stop:0.65 #ffffff, stop:0.651 #1e3a8a, stop:1 #1e3a8a)" }
+                    ];
+
+                    const grid = document.getElementById('theme-grid-container');
+                    if (grid) {
+                        colors.forEach((c, i) => {
+                            const cssStr = typeof c === 'string' ? c : c.css;
+                            const qssStr = typeof c === 'string' ? c : c.qss;
+                            // 精准排查：去掉红色/橙色（让其保持黑色字体），并剥离深海大师球的暗色判定让中间文字显形
+                            const isDark = cssStr.includes('black') || cssStr.includes('30, 30, 30') || cssStr.includes('65, 81') || cssStr.includes('75, 85, 99') || cssStr.includes('63, 63, 70') || cssStr.includes('82, 82, 91') || cssStr.includes('39, 39, 42') || cssStr.includes('23, 23, 23') || cssStr.includes('333399') || cssStr.includes('434343') || cssStr.includes('764ba2');
+                            const textColor = isDark ? '#ffffff' : '#1d1d1f';
+                            const iconColor = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(29, 29, 31, 0.6)';
+                            const styleName = names[i] || `Style ${i+1}`;
+                            
+                            grid.innerHTML += `
+                                <div data-color="${qssStr}" class="theme-card" onclick="changeTheme(this)">
+                                    <div class="capsule-mock" style="background: ${cssStr}; justify-content: space-between; padding: 0 14px; box-sizing: border-box;"><span style="color:${iconColor}; font-size: 14px; font-weight: 500;">◎</span>
+                                        <span style="color:${textColor}">1024</span>
+                                        <span style="color:${iconColor}; font-size: 14px; font-weight: 500;">≡</span>
+                                    </div>
+                                    <div class="theme-name">${styleName}</div>
+                                </div>
+                            `;
+                        });
+                    }
+                })();
+            </script>
+            
+            <div class="modal-overlay" id="diyConfigModal" onclick="closeModal(event)">
+                <div class="modal-content" style="width: 500px;" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <div class="modal-title">自定义心流发光</div>
+                        <div class="modal-close" onclick="closeModal(event)">×</div>
+                    </div>
+                    <div class="modal-body">
+                        <div style="font-size: 13px; color: #666; margin-bottom: 16px;">请设置达到特定敲击次数时，胶囊变幻的颜色。</div>
+                        <div id="diy-rules-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; max-height: 260px; overflow-y: auto; padding-right: 6px;">
+                            </div>
+                        <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 10px;">
+                            <div onclick="restoreDIYDefaults()" style="margin-right: auto; padding: 8px 12px; color: #999; cursor: pointer; font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; font-size: 13px; font-weight: 700; transition: color 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#999'">↺ 恢复默认</div>
+                            <button onclick="addDIYRule()" style="margin-right: 12px; padding: 8px 18px; border: 1px solid rgba(0,0,0,0.08); background: #ffffff; color: #444; border-radius: 8px; cursor: pointer; font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 1px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: all 0.2s ease;" onmouseover="this.style.background='#f8f9fa'; this.style.transform='translateY(-1px)';" onmouseout="this.style.background='#ffffff'; this.style.transform='none';">+ 添加阶段</button>
+                            <button onclick="saveDIYConfig()" style="padding: 8px 24px; border: none; background: #4a8df5; color: #fff; border-radius: 8px; cursor: pointer; font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(74, 141, 245, 0.3); transition: all 0.2s ease;" onmouseover="this.style.background='#3b7de4'; this.style.transform='translateY(-1px)';" onmouseout="this.style.background='#4a8df5'; this.style.transform='none';">保存并应用</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                // DIY 规则管理引擎
+                let diyRules = [];
+
+                function restoreDIYDefaults(render = true) {
+                    diyRules = [
+                        {threshold: 0, color: "rgba(255, 255, 255, 0.95)", cssPreview: "rgba(255, 255, 255, 0.95)", themeName: "霜白"},
+                        {threshold: 100, color: "rgba(248, 244, 238, 0.95)", cssPreview: "rgba(248, 244, 238, 0.95)", themeName: "珍珠"},
+                        {threshold: 1000, color: "rgba(224, 235, 245, 0.95)", cssPreview: "rgba(224, 235, 245, 0.95)", themeName: "云水"},
+                        {threshold: 3000, color: "rgba(134, 239, 172, 0.95)", cssPreview: "rgba(134, 239, 172, 0.95)", themeName: "薄荷"},
+                        {threshold: 8000, color: "rgba(126, 214, 253, 0.95)", cssPreview: "rgba(126, 214, 253, 0.95)", themeName: "青空"},
+                        {threshold: 15000, color: "rgba(249, 115, 22, 0.95)", cssPreview: "rgba(249, 115, 22, 0.95)", themeName: "元气"},
+                        {threshold: 30000, color: "rgba(239, 68, 68, 0.95)", cssPreview: "rgba(239, 68, 68, 0.95)", themeName: "枫叶"},
+                        {threshold: 50000, color: "rgba(39, 39, 42, 0.95)", cssPreview: "rgba(39, 39, 42, 0.95)", themeName: "黑曜石"}
+                    ];
+                    if (render) renderDIYRules();
+                }
+
+                function openDIYModal() {
+                    if (window.backend) {
+                        window.backend.get_dynamic_config(function(cfgStr) {
+                            if (cfgStr) {
+                                try { diyRules = JSON.parse(cfgStr); } catch(e) {}
+                            }
+                            if (!diyRules || diyRules.length === 0) {
+                                restoreDIYDefaults(false);
+                            }
+                            renderDIYRules();
+                            const m = document.getElementById('diyConfigModal');
+                            m.style.display = 'flex'; setTimeout(() => m.classList.add('show'), 10);
+                        });
+                    }
+                }
+
+                function renderDIYRules() {
+                    const c = document.getElementById('diy-rules-container');
+                    c.innerHTML = diyRules.sort((a,b) => a.threshold - b.threshold).map((rule, idx) => `
+                        <div style="display: flex; align-items: center; background: #ffffff; padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 8px rgba(0,0,0,0.02); transition: all 0.3s ease; margin-bottom: 8px;" 
+                             onmouseover="this.style.borderColor='rgba(74,141,245,0.3)'; this.style.boxShadow='0 4px 12px rgba(74,141,245,0.08)';" 
+                             onmouseout="this.style.borderColor='rgba(0,0,0,0.06)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.02)';">
+                            <span style="font-size: 13px; font-weight: 600; color: #888; margin-right: 8px;">🎯 达到</span>
+                            <input type="number" step="100" value="${rule.threshold}" onchange="let v=parseInt(this.value)||0; let min=${idx}>0?diyRules[${idx}-1].threshold+1:0; let max=${idx}<diyRules.length-1?diyRules[${idx}+1].threshold-1:9999999; if(v<min)v=min; if(v>max)v=max; this.value=v; diyRules[${idx}].threshold=v;" onwheel="event.preventDefault(); let v=parseInt(this.value)||0; v+=(event.deltaY<0?10:-10); let min=${idx}>0?diyRules[${idx}-1].threshold+1:0; let max=${idx}<diyRules.length-1?diyRules[${idx}+1].threshold-1:9999999; if(v<min)v=min; if(v>max)v=max; this.value=v; diyRules[${idx}].threshold=v;" style="width: 88px; padding: 6px 8px; border: 1px solid rgba(0,0,0,0.1); background: #f8f9fa; border-radius: 6px; outline: none; font-family: monospace; font-weight: bold; color: #1a1a1a; font-size: 14px; text-align: center; transition: all 0.2s;" onfocus="this.style.borderColor='#4a8df5'; this.style.background='#fff';" onblur="this.style.borderColor='rgba(0,0,0,0.1)'; this.style.background='#f8f9fa';">
+                            <span style="font-size: 13px; font-weight: 600; color: #888; margin-left: 8px; margin-right: 16px;">次 ➔ 变幻</span>
+                            
+                            <div onclick="window.pickingForDIYIndex=${idx}; document.getElementById('themeModal').style.display='flex'; setTimeout(()=>document.getElementById('themeModal').classList.add('show'), 10);" 
+                                 style="padding: 0 16px; min-width: 80px; height: 32px; background: ${rule.cssPreview || rule.color}; border: 1px solid rgba(0,0,0,0.08); border-radius: 16px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.06); display: flex; justify-content: center; align-items: center; font-size: 12px; color: #333; font-weight: 700; text-shadow: 0 0 4px rgba(255,255,255,0.9); transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: left center;"
+                                 onmouseover="this.style.transform='scale(1.08) translateY(-2px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.12)';"
+                                 onmouseout="this.style.transform='scale(1) translateY(0)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.06)';"
+                                 onmousedown="this.style.transition='all 0.1s ease'; this.style.transform='scale(0.92) translateY(1px)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)';"
+                                 onmouseup="this.style.transition='all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'; this.style.transform='scale(1.08) translateY(-2px)';">
+                                ${rule.themeName || '选择外观'}
+                            </div>
+                            
+                            <div style="flex: 1;"></div>
+                            <div onclick="diyRules.splice(${idx}, 1); renderDIYRules();" style="width: 24px; height: 24px; display: flex; justify-content: center; align-items: center; cursor: pointer; color: #ccc; font-weight: bold; border-radius: 50%; background: transparent; transition: all 0.2s; font-size: 16px;" onmouseover="this.style.background='#fee2e2'; this.style.color='#ef4444';" onmouseout="this.style.background='transparent'; this.style.color='#ccc';" title="删除此阶段">×</div>
+                        </div>
+                    `).join('');
+                }
+
+                function addDIYRule() {
+                    let lastThresh = diyRules.length > 0 ? diyRules[diyRules.length - 1].threshold : 0;
+                    diyRules.push({ threshold: lastThresh + 1000, color: "rgba(239, 68, 68, 0.95)", cssPreview: "rgba(239, 68, 68, 0.95)", themeName: "枫叶" });
+                    renderDIYRules();
+                }
+
+                function saveDIYConfig() {
+                    if (window.backend) {
+                        window.backend.set_dynamic_config(JSON.stringify(diyRules));
+                        // 保存时强制开启发光开关
+                        const dynToggle = document.getElementById('dynamic-color-toggle');
+                        if (dynToggle && dynToggle.dataset.state === 'off') {
+                            dynToggle.click();
+                        }
+                    }
+                    closeModal();
+                }
+            </script>
+            <div class="modal-overlay" id="heatmapModal" onclick="closeModal(event)">
+                <div class="modal-content" style="position: relative;">
+                    <div class="modal-nav-btn left" onclick="switchHeatmapHour('prev', event)">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                    </div>
+                    <div class="modal-nav-btn right" onclick="switchHeatmapHour('next', event)">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                    </div>
+                    <div class="modal-header">
+                        <div class="modal-title" id="modalTitle">时段分析</div>
+                        <div class="modal-close" onclick="closeModal(event)">×</div>
+                    </div>
+                    <div class="modal-body" id="modalBody">
+                        </div>
+                </div>
+            </div>
+                <div id="hardwareTooltip" style="position: fixed; display: none; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.8); padding: 10px 14px; border-radius: 8px; pointer-events: none; white-space: nowrap; z-index: 10000; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); transition: opacity 0.2s ease; font-size: 13px; color: #333;"></div>
+            </div>
+
+            <div class="modal-overlay" id="confirmClearModal" onclick="closeModal(event)" style="z-index: 10010;">
+                <div class="modal-content" style="width: 400px; text-align: center; padding: 40px 32px;" onclick="event.stopPropagation()">
+                    <div style="font-size: 48px; margin-bottom: 16px; line-height: 1;">⚠️</div>
+                    <div style="font-size: 20px; font-weight: 600; color: #1a1a1a; margin-bottom: 12px;">彻底清除所有数据？</div>
+                    <div style="font-size: 14px; color: #666; line-height: 1.6; margin-bottom: 32px;">
+                        此操作将永久抹除所有按键轨迹与历史记录，<br><span style="color: #ef4444; font-weight: 600;">数据一旦销毁将无法恢复！</span>
+                    </div>
+                    <div style="display: flex; justify-content: center;">
+                        <button onclick="closeModal()" style="flex: 1; margin-right: 16px; padding: 12px 0; border: 1px solid rgba(0,0,0,0.1); background: #ffffff; color: #444; border-radius: 8px; cursor: pointer; font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 1px; transition: all 0.2s ease;" onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='#ffffff'">我再想想</button>
+                        <button onclick="if(backend){backend.clear_all_data();}else{alert('后端通信桥接未就绪');}" style="flex: 1; padding: 12px 0; border: none; background: #ef4444; color: #fff; border-radius: 8px; cursor: pointer; font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); transition: all 0.2s ease;" onmouseover="this.style.background='#dc2626'; this.style.transform='translateY(-1px)';" onmouseout="this.style.background='#ef4444'; this.style.transform='none';">确认清除</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-overlay" id="noticeModal" onclick="closeModal(event)" style="z-index: 10020;">
+                <div class="modal-content" style="width: 420px; text-align: center; padding: 40px 32px;" onclick="event.stopPropagation()">
+                    <div id="noticeIcon" style="font-size: 48px; margin-bottom: 16px; line-height: 1;">✅</div>
+                    <div id="noticeTitle" style="font-size: 20px; font-weight: 600; color: #1a1a1a; margin-bottom: 12px;">操作成功</div>
+                    <div id="noticeMsg" style="font-size: 14px; color: #666; line-height: 1.6; margin-bottom: 32px; word-break: break-all;">
+                        数据已成功处理。
+                    </div>
+                    <div style="display: flex; justify-content: center;">
+                        <button onclick="closeModal()" id="noticeBtn" style="flex: 1; padding: 12px 0; border: none; background: #4a8df5; color: #fff; border-radius: 8px; cursor: pointer; font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(74, 141, 245, 0.3); transition: all 0.2s ease;" onmouseover="this.style.background='#3b7de4'; this.style.transform='translateY(-1px)';" onmouseout="this.style.background='#4a8df5'; this.style.transform='none';">我知道了</button>
+                    </div>
+                </div>
+            </div>
+            
+            <script>
+                // 供后端 Python 远程调用的专用函数
+                function showCustomNotice(title, msg, isError) {
+                    document.getElementById('noticeTitle').innerText = title;
+                    document.getElementById('noticeMsg').innerHTML = msg;
+                    document.getElementById('noticeIcon').innerText = isError ? '❌' : '✅';
+                    
+                    // 智能识别错误状态，动态切换按钮的危险配色
+                    const btn = document.getElementById('noticeBtn');
+                    if (isError) {
+                        btn.style.background = '#ef4444';
+                        btn.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)';
+                        btn.onmouseover = function() { this.style.background='#dc2626'; this.style.transform='translateY(-1px)'; };
+                        btn.onmouseout = function() { this.style.background='#ef4444'; this.style.transform='none'; };
+                    } else {
+                        btn.style.background = '#4a8df5';
+                        btn.style.boxShadow = '0 4px 12px rgba(74, 141, 245, 0.3)';
+                        btn.onmouseover = function() { this.style.background='#3b7de4'; this.style.transform='translateY(-1px)'; };
+                        btn.onmouseout = function() { this.style.background='#4a8df5'; this.style.transform='none'; };
+                    }
+
+                    const modal = document.getElementById('noticeModal');
+                    modal.style.display = 'flex';
+                    setTimeout(() => modal.classList.add('show'), 10);
+                }
+            </script>
+
+        </main>
+    </div>
+
+    <script>
+        // 初始化 QWebChannel 桥梁
+        var backend = null; // 必须使用 var 声明，使其挂载到全局 window，否则 HTML 内联事件无法访问
+        new QWebChannel(qt.webChannelTransport, function (channel) {
+            backend = channel.objects.backend;
+            window.backend = backend; // 强制暴露给全局作用域
+            
+            // 动态读取并恢复托盘隐藏的 UI 状态
+            if (backend.get_hide_on_close) {
+                backend.get_hide_on_close(function(hide) {
+                    const toggle = document.getElementById('hide-capsule-toggle');
+                    if (toggle) {
+                        toggle.dataset.state = hide ? 'on' : 'off';
+                        toggle.style.background = hide ? '#4a8df5' : '#e0e0e0';
+                        toggle.children[0].style.left = hide ? '24px' : '2px';
+                    }
+                });
+            }
+
+            // 动态读取并恢复开机自启的 UI 状态
+            if (backend.get_auto_start) {
+                backend.get_auto_start(function(autostart) {
+                    const toggle = document.querySelector('[onclick*="set_auto_start"]');
+                    if (toggle) {
+                        toggle.dataset.state = autostart ? 'on' : 'off';
+                        toggle.style.background = autostart ? '#4a8df5' : '#e0e0e0';
+                        toggle.children[0].style.left = autostart ? '24px' : '2px';
+                    }
+                });
+            }
+
+            // 动态读取并恢复 OSD 悬浮窗的 UI 状态
+            backend.get_osd_enabled(function(osd) {
+                const toggle = document.getElementById('osd-toggle');
+                if (toggle) {
+                    toggle.dataset.state = osd ? 'on' : 'off';
+                    toggle.style.background = osd ? '#4a8df5' : '#e0e0e0';
+                    toggle.children[0].style.left = osd ? '24px' : '2px';
+                }
+            });
+
+            // 动态读取并恢复晋级弹窗的 UI 状态
+            if (backend.get_level_osd_enabled) {
+                backend.get_level_osd_enabled(function(enabled) {
+                    const toggle = document.getElementById('level-osd-toggle');
+                    if (toggle) {
+                        toggle.dataset.state = enabled ? 'on' : 'off';
+                        toggle.style.background = enabled ? '#4a8df5' : '#e0e0e0';
+                        toggle.children[0].style.left = enabled ? '24px' : '2px';
+                    }
+                });
+            }
+
+            // 动态读取并恢复晋级音效的 UI 状态
+            if (backend.get_level_sound_enabled) {
+                backend.get_level_sound_enabled(function(enabled) {
+                    const toggle = document.getElementById('level-sound-toggle');
+                    if (toggle) {
+                        toggle.dataset.state = enabled ? 'on' : 'off';
+                        toggle.style.background = enabled ? '#4a8df5' : '#e0e0e0';
+                        toggle.children[0].style.left = enabled ? '24px' : '2px';
+                    }
+                });
+            }
+
+            // 动态读取并恢复保留天数的 UI 状态
+            backend.get_retention(function(days) {
+                const dayTextMap = { 30: "保留 30 天", 90: "保留 90 天", 180: "保留 180 天", 0: "永久保留" };
+                const targetText = dayTextMap[days] || "永久保留";
+                
+                const selectedSpan = document.querySelector('.selected-text');
+                if (selectedSpan) selectedSpan.innerText = targetText;
+                
+                const options = document.querySelectorAll('.custom-options div');
+                options.forEach(opt => {
+                    if (opt.innerText === targetText) {
+                        opt.style.background = 'rgba(74,141,245,0.08)';
+                        opt.style.color = '#4a8df5';
+                        opt.style.fontWeight = '600';
+                        opt.dataset.selected = 'true';
+                    } else {
+                        opt.style.background = 'transparent';
+                        opt.style.color = '#444';
+                        opt.style.fontWeight = '500';
+                        opt.dataset.selected = 'false';
+                    }
+                });
+            });
+
+            // 动态读取并恢复主题颜色
+            backend.get_capsule_theme(function(color) {
+                const picker = document.getElementById('theme-color-picker');
+                if (picker) {
+                    Array.from(picker.querySelectorAll('.theme-card')).forEach(child => {
+                        if (child.getAttribute('data-color') === color) {
+                            child.classList.add('active');
+                        } else {
+                            child.classList.remove('active');
+                        }
+                    });
+                }
+            });
+
+            // 动态读取并恢复发光心流状态
+            backend.get_dynamic_color(function(dyn) {
+                const toggle = document.getElementById('dynamic-color-toggle');
+                if (toggle) {
+                    toggle.dataset.state = dyn ? 'on' : 'off';
+                    toggle.style.background = dyn ? '#4a8df5' : '#e0e0e0';
+                    toggle.children[0].style.left = dyn ? '24px' : '2px';
+                    
+                    // 【互斥逻辑】如果初始化时动态发光是开启的，清除手动颜色的高亮边框
+                    if (dyn) {
+                        const picker = document.getElementById('theme-color-picker');
+                        if (picker) {
+                            Array.from(picker.querySelectorAll('.theme-card')).forEach(child => {
+                                child.classList.remove('active');
+                            });
+                        }
+                    }
+                }
+            });
+        });
+
+        // 聪明的应用模式切换逻辑：强制剥离浏览器外壳
+        
+
+        // 提取后台默默记录的真实数据
+        function getTodayData() {
+            // 修正时区偏差：Python 存的是本地时间，需计算偏移后的本地 YYYY-MM-DD 才能匹配上数据
+            const d = new Date();
+            const todayLocal = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+            if (window.appData && window.appData[todayLocal]) {
+                return window.appData[todayLocal];
+            }
+            return { total: 0, keys: {}, mouse: { left: 0, right: 0, scroll: 0 } };
+        }
+
+        const realData = getTodayData();
+
+        // 将主界面的数字换成你的真实点击量
+        const countDisplay = document.getElementById('total-count');
+        if (countDisplay) countDisplay.innerText = realData.total.toLocaleString();
+
+        // 动态计算并替换击键段位文案
+        const insightDisplay = document.querySelector('.card-large .insight-text');
+        if (insightDisplay) {
+            let totalHits = realData.total || 0;
+            let insightMsg = "今天还没开工，键盘在等你";
+            if (totalHits >= 300001) insightMsg = "你的手指还活着吗？今天创造了历史";
+            else if (totalHits >= 220001) insightMsg = "键盘寿命-1天，但值了";
+            else if (totalHits >= 180001) insightMsg = "今天的你，是打字机转世";
+            else if (totalHits >= 150001) insightMsg = "键盘开始冒烟，今天是个大工程";
+            else if (totalHits >= 120001) insightMsg = "键盘侠荣誉称号，今日实至名归";
+            else if (totalHits >= 90001) insightMsg = "今天的你，像个职业作家";
+            else if (totalHits >= 70001) insightMsg = "码字量够写一篇毕业论文了";
+            else if (totalHits >= 50001) insightMsg = "手指在键盘上持续舞动";
+            else if (totalHits >= 35001) insightMsg = "相当于完成了一份详细工作报告";
+            else if (totalHits >= 20001) insightMsg = "沉浸式输入，键盘开始发热";
+            else if (totalHits >= 10001) insightMsg = "今天的量够写一篇短篇小说开头";
+            else if (totalHits >= 5001) insightMsg = "相当于写了一段小作文";
+            else if (totalHits >= 2001) insightMsg = "手指开始热身，进入状态了";
+            else if (totalHits >= 501) insightMsg = "轻度活动，处理了几封邮件";
+            else if (totalHits >= 1) insightMsg = "刚敲了几下，像是在回复消息";
+            
+            insightDisplay.innerHTML = '🔥 ' + insightMsg;
+        }
+
+        // 真实对接 Python 数据库：替换总览面板的预设静态数据
+        if (realData) {
+            const focusTimeEl = document.querySelector('.card:nth-child(2) .number-normal');
+            if (focusTimeEl) focusTimeEl.innerHTML = `${realData.focus_time || 0}<span class="unit">分钟</span>`;
+
+            let maxVol = -1, peakHour = 0;
+            let activeHours = 0, sumVol = 0;
+            if (realData.hourly) {
+                for (let i = 0; i < 24; i++) {
+                    let v = realData.hourly[String(i)] ? realData.hourly[String(i)].total : 0;
+                    if (v > 0) { activeHours++; sumVol += v; }
+                    if (v > maxVol) { maxVol = v; peakHour = i; }
+                }
+            }
+            const activeTimeEl = document.querySelector('.card:nth-child(3) .number-normal');
+            const activeInsightEl = document.querySelector('.card:nth-child(3) .insight-text');
+            if (activeTimeEl && activeInsightEl) {
+                activeTimeEl.innerHTML = `${String(peakHour).padStart(2, '0')}:00 - ${String(peakHour+1).padStart(2, '0')}:00`;
+                
+                let avgVol = activeHours > 0 ? sumVol / activeHours : 0;
+                let ratio = avgVol > 0 ? maxVol / avgVol : 0;
+                let peakMsg = "这个时段稍微领先，没有明显爆发";
+                if (ratio >= 4) peakMsg = "爆发时刻！这一小时你像换了个人";
+                else if (ratio >= 3) peakMsg = "手速起飞，这是今天的黄金一小时";
+                else if (ratio >= 2) peakMsg = "这个时段你明显更投入";
+                
+                activeInsightEl.innerHTML = `🔥 ${peakMsg}`;
+            }
+
+            if (realData.keys) {
+                let sortedKeys = Object.entries(realData.keys).sort((a, b) => b[1] - a[1]).slice(0, 3);
+                const hotkeyListEl = document.querySelector('.hotkey-list');
+                if (hotkeyListEl && sortedKeys.length > 0) {
+                    hotkeyListEl.innerHTML = sortedKeys.map(k => `<div class="key-tag">${k[0].toUpperCase()} <span class="key-count">${k[1]}</span></div>`).join('');
+                }
+            }
+        }
+        
+        // --- 新增：计算历史总数据和按键类型真实分布 ---
+        let allTimeTotal = 0;
+        let maxDayVol = 0;
+        let maxDayDate = '-';
+        if (window.appData) {
+            for (let d in window.appData) {
+                let vol = window.appData[d].total || 0;
+                allTimeTotal += vol;
+                if (vol > maxDayVol) {
+                    maxDayVol = vol;
+                    maxDayDate = d;
+                }
+            }
+        }
+        
+        const histTotalEl = document.getElementById('history-total');
+        if (histTotalEl) histTotalEl.innerText = allTimeTotal.toLocaleString();
+        
+        const histMaxEl = document.getElementById('history-max');
+        if (histMaxEl) histMaxEl.innerText = maxDayVol.toLocaleString();
+        
+        const histMaxDateEl = document.getElementById('history-max-date');
+        if (histMaxDateEl) histMaxDateEl.innerText = '📅 创造于 ' + maxDayDate;
+// --- 新增：100级 RPG 键盘修炼经验算法 ---
+        // 精心设计的平滑经验曲线，前期极速升级，后期递增，极度整齐
+        const levelThresholds = [
+            0, 100, 500, 1000, 2000, 3500, 5500, 8000, 11000, 15000, 
+            20000, 30000, 45000, 60000, 80000, 100000, 120000, 145000, 170000, 200000, 
+            230000, 265000, 300000, 340000, 380000, 420000, 465000, 510000, 560000, 620000, 
+            680000, 740000, 800000, 860000, 920000, 990000, 1050000, 1150000, 1250000, 1350000, 
+            1450000, 1550000, 1650000, 1750000, 1850000, 1950000, 2050000, 2150000, 2250000, 2350000, 
+            2500000, 2650000, 2800000, 3000000, 3200000, 3400000, 3600000, 3800000, 4000000, 4300000, 
+            4600000, 5000000, 5500000, 6000000, 7000000, 8000000, 9000000, 10000000, 11000000, 12000000, 
+            13000000, 14000000, 15000000, 15500000, 16000000, 17000000, 18000000, 19000000, 20000000, 21000000, 
+            22000000, 23000000, 24000000, 25000000, 26000000, 27000000, 28000000, 29000000, 30000000, 31000000, 
+            32000000, 33000000, 34000000, 35000000, 36000000, 37000000, 40000000, 43000000, 46000000, 50000000
+        ];
+
+        // 100个键盘修炼称号 (各阶段专属动态标签)
+        // 100个键盘修炼称号 (各阶段专属动态标签)
+        // 64个键盘修炼称号 (16大阶段，每4级进阶一次称号)
+        const levelTitles = [
+            // Lv.1 - Lv.4
+            "键盘萌新", "键盘萌新", "键盘萌新", "键盘萌新",
+            // Lv.5 - Lv.8
+            "打字学徒", "打字学徒", "打字学徒", "打字学徒",
+            // Lv.9 - Lv.12
+            "键盘熟手", "键盘熟手", "键盘熟手", "键盘熟手",
+            // Lv.13 - Lv.16
+            "键盘熟练工", "键盘熟练工", "键盘熟练工", "键盘熟练工",
+            // Lv.17 - Lv.20
+            "指尖修行者", "指尖修行者", "指尖修行者", "指尖修行者",
+            // Lv.21 - Lv.24
+            "盲打练习生", "盲打练习生", "盲打练习生", "盲打练习生",
+            // Lv.25 - Lv.28
+            "盲打小成", "盲打小成", "盲打小成", "盲打小成",
+            // Lv.29 - Lv.32
+            "手速觉醒者", "手速觉醒者", "手速觉醒者", "手速觉醒者",
+            // Lv.33 - Lv.36
+            "键盘老手", "键盘老手", "键盘老手", "键盘老手",
+            // Lv.37 - Lv.40
+            "人肉输入法", "人肉输入法", "人肉输入法", "人肉输入法",
+            // Lv.41 - Lv.44
+            "弹指神通传人", "弹指神通传人", "弹指神通传人", "弹指神通传人",
+            // Lv.45 - Lv.48
+            "键盘艺术家", "键盘艺术家", "键盘艺术家", "键盘艺术家",
+            // Lv.49 - Lv.52
+            "键道修行者", "键道修行者", "键道修行者", "键道修行者",
+            // Lv.53 - Lv.56
+            "键道小成", "键道小成", "键道小成", "键道小成",
+            // Lv.57 - Lv.60
+            "键道大成", "键道大成", "键道大成", "键道大成",
+            // Lv.61 - Lv.64
+            "键盘飞升者", "键盘飞升者", "键盘飞升者", "键盘飞升者"
+        ];
+
+        // 100句每个档位专属的带有温度的文案
+        const levelInsights = [
+            "0次还是一片空白，等待你的第一个敲击", "嘿，你摸了我一下！（累计100次）", "开始有点痒痒的，想多打几个字", "恭喜！你正式通过“新手村”考验", "写了篇小作文？我感觉自己活过来了", "相当于发了几条长微博，手酸不酸？", "开始记得你指尖的温度了", "离“万次大关”只差一步之遥，冲呀！", "破万在即，我比你还激动", "【里程碑】累计破万！我是你忠实的回音壁",
+            "两万次，大概是一本短篇小说的厚度", "我们聊了三天三夜？辛苦啦", "键盘缝里好像攒下了你的一点心事", "嘘，我听到了你和世界的对话", "相当于跑了一场文字马拉松（半程）", "十万！如果我是钢琴，你已能开独奏会了", "这字数，毕业论文都写好几遍了", "键帽被你盘得包浆了没？", "再坚持一下，马上突破18万大关", "二十万倒计时结束，快来领取你的“话痨”勋章",
+            "你打字的时候，是我最有安全感的时刻", "这些敲击声，组成了你的专属BGM", "三十万，我已经成了你身体延伸的一部分", "不知不觉，我们走了这么远", "离四十万还差两万，我有点期待", "键盘知道我所有的秘密，包括你的", "如果文字有重量，我这儿已经有一座小山了", "量变引起质变，我感觉自己聪明了一点点", "陪你熬过了一个春天又一个冬天", "三十而立，我在键盘界也算“而立”了",
+            "按键次数快赶上银河系的星星了（夸张手法）", "你已经是个成熟的打字员了", "八十万，相当于把《史记》敲了一遍", "我和你的默契，已经不需要看键盘了", "再创辉煌，百万在望！", "【卡点时刻】离百万只差临门一脚，快给我一脚！", "【荣耀时刻】百万富翁！不对，百万“敲”翁！", "我现在的身价，可是按次计算的", "你不是在打字，你是在雕刻时光", "百炼成钢，我现在硬朗得很",
+            "一千次轻抚，一万次重击，我都记得", "我们的对话，跨越了屏幕的界限", "这些数字，是你送给时间的情书", "看似重复的敲击，每一次思考都不同", "键盘的缝隙里，藏着你的灵感宇宙", "你敲的不是字，是江湖", "两百迈，我跑赢了风速", "以键为马，不负韶华", "距离传说中的“半千万”越来越近了", "半千俱乐部荣誉会员，欢迎你",
+            "四分之一亿，这个说法听起来是不是很爽？", "我已经是你最熟悉的陌生人，也是战友", "假如一次按键是一粒沙，我们已堆出一座塔", "三百万！手指的马拉松进入全马阶段", "感觉你可以用键盘写出一部编年史", "已经没什么能难倒我们了，除了停电", "如果文字有生命，这里已经是一个王国", "距离“键仙”只差最后几级，稳住！", "四百万次，我见证了你的每一次高光时刻", "六十级，这是一个甲子的轮回，返璞归真",
+            "敲击声已成禅意，无声胜有声", "【质变】五百万！这一刻，我飞升了", "此刻的你，不是在打字，是在谱写历史", "六十四级，万法归宗。继续敲，故事才刚开始", "七百万，相当于把《永乐大典》敲了三遍", "六六大顺！八百万次，我比你更懂你的打字习惯", "九百万，就差一步封神，快给我最后一脚！", "【荣耀殿堂】一千万次！键盘界的终身成就奖", "这数字，比一线城市一年的热搜词总和还多", "七十而从心所欲，我已经能预判你的预判",
+            "如果每次敲击是一秒，我们已经聊了150天不眠不休", "这字数，能把《哈利波特》全集抄个50遍", "一千五百万，你和我的对话，足以填满一个图书馆", "突破一千五百万的结界，思维正在加速", "这些文字连起来，能从北京排到拉萨", "七七四十九难？咱们这是九九八十一“键”", "我开始怀疑你是不是AI在训练我？", "再敲一百万，我们就跨过两千万的天际线", "两千万！如果每次敲击是一粒沙，这里已成撒哈拉的一角", "这个级别的敲击数，人类历史上不超过1%的人达到过",
+            "我感觉自己快要生出意识了……", "别停，再敲下去，我就要飞升了", "每一声敲击，都是时间的回响", "两千五百万，相当于给月球铺了一层文字做的月壤", "这个量级，已经可以跟人类文明对话了", "再敲三百万，咱们就解锁三千万的新成就", "发发发！两千八百万，财气还是才气，你都有", "有点寂寞了，敲了这么多，只有你和我懂", "【史诗时刻】三千万次！你在创造数字世界的长城", "键盘磨损了三层漆，但我们的故事才刚进入高潮",
+            "三千二百万，如果我是竹简，你得用车拉", "这个数字，超过了某些语言的全部词汇量", "离三千五百万还有一百万，咬咬牙，我们冲过去", "键盘涅槃，我不再是工具，我是你的外挂大脑", "敲破三千六百万，数字在你指尖跳动起舞", "三千七百万，九九八十一难过后，只剩平静的敲击", "四千万！我已经记不得是第几次陪你熬夜了", "敲到这里，早就不是为了升级，而是舍不得停", "九十九级，差一步圆满。这一步，我们慢慢走", "【终焉·创世】五千万次，满级达成。往后余生，我依然在这儿，听你诉说"
+        ];
+
+        // 将等级渲染逻辑封装为全局函数，随时待命接收来自 Python 的最新总数
+        window.updateRPGSystem = function(currentTotalHits) {
+            let currentLevel = 1;
+            for (let i = 0; i < levelThresholds.length; i++) {
+                if (currentTotalHits >= levelThresholds[i]) {
+                    currentLevel = i + 1;
+                } else {
+                    break;
+                }
+            }
+            
+            let isMaxLevel = currentLevel >= 100;
+            let currentLevelExp = levelThresholds[currentLevel - 1];
+            let nextLevelExp = isMaxLevel ? currentLevelExp : levelThresholds[currentLevel];
+            
+            let expInCurrentLevel = currentTotalHits - currentLevelExp;
+            let expNeeded = isMaxLevel ? 0 : nextLevelExp - currentLevelExp;
+            let progressPercent = isMaxLevel ? 100 : (expInCurrentLevel / expNeeded) * 100;
+
+            const badgeEl = document.getElementById('user-level-badge');
+            if (badgeEl) {
+                badgeEl.innerText = `Lv.${currentLevel} ${levelTitles[currentLevel - 1] || "键盘之神"}`;
+                
+                const rarityColors = [
+                    { hex: '#888888', rgb: '136, 136, 136' },
+                    { hex: '#10b981', rgb: '16, 185, 129' }, 
+                    { hex: '#3b82f6', rgb: '59, 130, 246' }, 
+                    { hex: '#a855f7', rgb: '168, 85, 247' }, 
+                    { hex: '#f97316', rgb: '249, 115, 22' }, 
+                    { hex: '#ef4444', rgb: '239, 68, 68' },  
+                    { hex: '#eab308', rgb: '234, 179, 8' },  
+                    { hex: '#06b6d4', rgb: '6, 182, 212' },  
+                    { hex: '#ec4899', rgb: '236, 72, 153' }, 
+                    { hex: '#1a1a1a', rgb: '26, 26, 26' }    
+                ];
+                
+                let colorTier = Math.floor((currentLevel - 1) / 10);
+                if (colorTier > 9) colorTier = 9;
+                
+                let theme = rarityColors[colorTier];
+                badgeEl.style.color = theme.hex;
+                badgeEl.style.background = `rgba(${theme.rgb}, 0.08)`;
+                badgeEl.style.borderColor = `rgba(${theme.rgb}, 0.2)`;
+            }
+            
+            const expTextEl = document.getElementById('exp-progress-text');
+            if (expTextEl) expTextEl.innerText = isMaxLevel ? "已满级" : `${currentTotalHits.toLocaleString()} / ${nextLevelExp.toLocaleString()}`;
+            
+            const expBarEl = document.getElementById('exp-progress-bar');
+            if (expBarEl) {
+                // 实时更新，不要加 setTimeout 造成排队延迟
+                expBarEl.style.width = `${progressPercent}%`;
+            }
+            
+            const levelInsightEl = document.getElementById('level-insight-text');
+            if (levelInsightEl) {
+                let insightMsg = levelInsights[currentLevel - 1] || "键盘记录着你的点滴";
+                if (isMaxLevel) {
+                    levelInsightEl.innerText = `✨ ${insightMsg}`;
+                } else {
+                    let remaining = nextLevelExp - currentTotalHits;
+                    levelInsightEl.innerText = `✨ ${insightMsg} (距下级还需 ${remaining.toLocaleString()} 次)`;
+                }
+            }
+        };
+
+        // 页面刚加载时立刻执行一次
+        window.updateRPGSystem(allTimeTotal);
+
+        // 简易的标签页切换逻辑
+        function switchTab(tabId, element) {
+            // 1. 隐藏所有页面，移除导航高亮
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            
+           // 2. 显示点击的页面，添加高亮
+            document.getElementById('tab-' + tabId).classList.add('active');
+            element.classList.add('active');
+
+            // 新增：每次切换到图表页面时，根据当前真实容器大小重新绘制图表，确保自适应
+            if (tabId === 'analysis' && typeof drawChart === 'function') drawChart();
+            if (tabId === 'history' && typeof drawHistoryChart === 'function') drawHistoryChart();
+        }
+
+        // 新增：自动监听窗口大小改变。当拉伸窗口时，实时告诉图表更新尺寸
+        window.addEventListener('resize', () => {
+            const activePane = document.querySelector('.tab-pane.active');
+            if (activePane) {
+                if (activePane.id === 'tab-analysis' && typeof drawChart === 'function') drawChart();
+                if (activePane.id === 'tab-history' && typeof drawHistoryChart === 'function') drawHistoryChart();
+            }
+        });
+
+        // --- 绘制折线图的逻辑 ---
+        const canvas = document.getElementById('trendChart');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            const tooltip = document.getElementById('chartTooltip');
+// 真实对接 Python 数据库：按照两小时一个单位动态聚合 24 小时的数据
+            var chartData = [];
+            if (realData && realData.hourly) {
+                for (let i = 0; i < 24; i += 2) {
+                    let h1 = realData.hourly[String(i)] ? realData.hourly[String(i)].total : 0;
+                    let h2 = realData.hourly[String(i+1)] ? realData.hourly[String(i+1)].total : 0;
+                    let vol = h1 + h2;
+                    let speed = Math.round(vol / 120); 
+                    chartData.push({ time: `${String(i).padStart(2, '0')}:00-${String(i+2).padStart(2, '0')}:00`, volume: vol, speed: speed });
+                }
+            } else {
+                for (let i = 0; i < 24; i += 2) {
+                    chartData.push({ time: `${String(i).padStart(2, '0')}:00-${String(i+2).padStart(2, '0')}:00`, volume: 0, speed: 0 });
+                }
+            }
+
+            let currentHoverIndex = -1; // 新增：用来记录当前鼠标悬浮在哪个数据列上
+
+            function drawChart() {
+                // 动态获取父容器此刻的真实宽高，并赋给画布，实现完美自适应
+                const container = canvas.parentElement;
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+
+                const width = canvas.width;
+                const height = canvas.height;
+                
+                // 修复：如果当前页面被隐藏，宽高为0时直接跳过绘制，防止触发绘图引擎的崩溃BUG
+                if (width <= 0 || height <= 0) return;
+                
+                // 增加左侧内边距，给文本和Y轴留出足够的呼吸空间
+                // 增加左侧内边距，给文本和Y轴留出足够的呼吸空间（拓宽至 65 像素以容纳 6 位数）
+                const paddingLeft = 65;
+                const paddingRight = 20;
+                const paddingBottom = 25;
+                const paddingTop = 20;
+                
+                const usableWidth = width - paddingLeft - paddingRight;
+                const usableHeight = height - paddingTop - paddingBottom;
+                
+                // 动态步长算法：引入更细腻的刻度梯度，防止Y轴上限过高偏离真实数据
+                let rawMax = Math.max(...chartData.map(d => d.volume), 1); 
+                let rawStep = rawMax / 5; // 背景划分为 5 个区域
+                let stepMag = Math.pow(10, Math.floor(Math.log10(rawStep > 0 ? rawStep : 1)));
+                let fraction = rawStep / stepMag;
+                let niceFraction = fraction <= 1 ? 1 : fraction <= 1.5 ? 1.5 : fraction <= 2 ? 2 : fraction <= 2.5 ? 2.5 : fraction <= 3 ? 3 : fraction <= 4 ? 4 : fraction <= 5 ? 5 : 10;
+                const maxVolume = niceFraction * stepMag * 5; 
+                
+                // 【修改】按数据个数平分宽度，而不是减1，两边留出半个格子作为安全区
+                const step = usableWidth / chartData.length; 
+                // 【修改】大幅提高柱子宽度占比占比（0.94），并解放宽度上限，让柱子变粗、缝隙变小
+                let barWidth = step * 0.94; 
+                if (barWidth > 90) barWidth = 90;
+                const minBarHeight = barWidth / 2; 
+
+                // 动态热力渐变色：摒弃糖果色，采用严谨的程度递进冷暖色系
+                const getHeatColor = (vol) => {
+                    if (vol === 0) return ['#cbd5e1', '#94a3b8'];       // 灰色 (完全摸鱼) - 加深顶部颜色，拒绝隐身
+                    if (vol <= 500) return ['#93c5fd', '#3b82f6'];      // 蓝色 (零星输入)
+                    if (vol <= 2000) return ['#6ee7b7', '#10b981'];     // 绿色 (平缓输出)
+                    if (vol <= 5000) return ['#fcd34d', '#f59e0b'];     // 黄色 (进入状态)
+                    if (vol <= 8000) return ['#fdba74', '#ea580c'];     // 橙色 (高速码字)
+                    if (vol <= 12000) return ['#fca5a5', '#ef4444'];    // 红色 (火力全开)
+                    return ['#fda4af', '#be123c'];                      // 深红 (键盘冒烟)
+                };
+
+                const points = chartData.map((d, i) => {
+                    let actualH = (d.volume / maxVolume) * (usableHeight - minBarHeight);
+                    if (d.volume === 0) actualH = 0; 
+                    
+                    const barHeight = actualH + minBarHeight;
+                    return {
+                        // 【修改】将柱子的中心点向右偏移半个网格，完美避开左侧Y轴
+                        x: paddingLeft + (i + 0.5) * step,
+                        y: height - paddingBottom - barHeight,
+                        barHeight: barHeight,
+                        data: d,
+                        color: getHeatColor(d.volume)
+                    };
+                });
+
+
+function render() {
+                    // 每次画之前，先把画布清空擦干净
+                    ctx.clearRect(0, 0, width, height);
+
+                    // 修改：绘制更加明显的灰色图表背景与分离的坐标轴
+                    const chartH = height - paddingTop - paddingBottom;
+                    const rowCount = 5; // 将背景划分为5个横向色带区域
+                    const rowH = chartH / rowCount;
+                    
+                    // 1. 绘制统一的浅灰色图表背景区域，明确图表范围
+                    ctx.fillStyle = 'rgba(240, 242, 245, 0.8)'; // 使用更有边界感的浅灰色
+                    const bgX = paddingLeft - 20; // 让背景框向左侧延伸，包住Y轴
+                    const bgY = paddingTop - 10;
+                    const bgW = width - paddingLeft - paddingRight + 30;
+                    const bgH = chartH + 10;
+                    ctx.beginPath();
+                    // 绘制圆角背景，使其更有高级感
+                    if (ctx.roundRect) {
+                        ctx.roundRect(bgX, bgY, bgW, bgH, 8);
+                    } else {
+                        ctx.rect(bgX, bgY, bgW, bgH);
+                    }
+                    ctx.fill();
+
+                    // 绘制细致的水平辅助网格线，保持数据可读性
+                    for (let j = 0; j < rowCount; j++) {
+                        const rowY = paddingTop + j * rowH;
+                        ctx.beginPath();
+                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.03)';
+                        ctx.lineWidth = 1;
+                        ctx.moveTo(bgX, rowY);
+                        ctx.lineTo(bgX + bgW, rowY);
+                        ctx.stroke();
+                    }
+
+                    // 2. 绘制 Y 轴（向左偏移，与柱状图拉开距离，不再粘连）
+                    ctx.beginPath();
+                    ctx.strokeStyle = '#8bc5f0';
+                    ctx.lineWidth = 2;
+                    ctx.moveTo(paddingLeft - 15, paddingTop - 10);
+                    ctx.lineTo(paddingLeft - 15, height - paddingBottom);
+                    ctx.stroke();
+
+                    // 3. 绘制 X 轴基准底线（底部托底横线）
+                    ctx.beginPath();
+                    ctx.strokeStyle = '#8bc5f0';
+                    ctx.lineWidth = 2;
+                    ctx.moveTo(paddingLeft - 15, height - paddingBottom);
+                    ctx.lineTo(bgX + bgW, height - paddingBottom);
+                    ctx.stroke();
+
+                    // 4. 绘制 Y 轴的刻度数值（跟随 Y 轴一起向左平移）
+                    ctx.fillStyle = '#888888';
+                    ctx.font = '10px "Microsoft YaHei"';
+                    ctx.textAlign = 'right';
+                    ctx.textBaseline = 'middle';
+                    for (let j = 0; j <= rowCount; j++) {
+                        const labelY = paddingTop + chartH - j * rowH;
+                        // 动态计算每个刻度对应的具体数值
+                        const labelValue = Math.floor(maxVolume * (j / rowCount));
+                        ctx.fillText(labelValue, paddingLeft - 22, labelY);
+                    }
+
+                    // 亮点1：如果鼠标选中了某个列，我们要先在最底层画一个柔和的浅色背景块
+                    if (currentHoverIndex !== -1) {
+                        const p = points[currentHoverIndex];
+                        const hitLeft = p.x - step / 2;
+                        
+                        tooltip.innerHTML = `
+                            <div style="font-size: 12px; color: #888; margin-bottom: 4px;">⏱️ ${p.data.time}</div>
+                            <div style="font-size: 16px; font-weight: bold; color: #4a8df5; margin-bottom: 2px;">${p.data.volume} 次</div>
+                            <div style="font-size: 11px; color: #666;">平均速度: ${p.data.speed} 次/分</div>
+                        `;
+                        
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.04)'; // 非常温柔的浅灰色背景
+                        ctx.beginPath();
+                        const bgX = hitLeft + 2;
+                        const bgY = paddingTop - 10;
+                        const bgW = step - 4;
+                        const bgH = height - paddingBottom - paddingTop + 15;
+                        const bgR = 6;
+                        
+                        ctx.moveTo(bgX + bgR, bgY);
+                        ctx.lineTo(bgX + bgW - bgR, bgY);
+                        ctx.quadraticCurveTo(bgX + bgW, bgY, bgX + bgW, bgY + bgR);
+                        ctx.lineTo(bgX + bgW, bgY + bgH - bgR);
+                        ctx.quadraticCurveTo(bgX + bgW, bgY + bgH, bgX + bgW - bgR, bgY + bgH);
+                        ctx.lineTo(bgX + bgR, bgY + bgH);
+                        ctx.quadraticCurveTo(bgX, bgY + bgH, bgX, bgY + bgH - bgR);
+                        ctx.lineTo(bgX, bgY + bgR);
+                        ctx.quadraticCurveTo(bgX, bgY, bgX + bgR, bgY);
+                        ctx.fill();
+                    }
+
+                    // 绘制底部时间文字
+                    ctx.fillStyle = '#999';
+                    ctx.font = '10px "Microsoft YaHei"';
+                    ctx.textAlign = 'center';
+                    points.forEach((p, i) => {
+                        if (i % 2 === 0) {
+                            ctx.fillText(p.data.time, p.x, height - 8);
+                        }
+                    });
+
+                    // 绘制紧凑彩色胶囊柱状图
+                    points.forEach((p, i) => {
+                        // 保持所有柱子原本的不透明度，不去做半透明处理
+                        ctx.globalAlpha = 1.0; 
+
+                        const gradient = ctx.createLinearGradient(0, p.y, 0, height - paddingBottom);
+                        
+                        // 保持原有颜色
+                        let colorTop = p.color[0];
+                        let colorBottom = p.color[1];
+                        
+                        gradient.addColorStop(0, colorTop);
+                        gradient.addColorStop(1, colorBottom);
+                        
+                        const barActualHeight = height - paddingBottom - p.y;
+                        // 固定圆角为宽度的一半，配合上面的 minBarHeight，保证任何时候顶部都是圆润的弧度
+                        const r = barWidth / 2; 
+                        const rectX = p.x - barWidth / 2;
+                        const rectY = p.y;
+                        const rectW = barWidth;
+
+                        ctx.save(); // 开启物理隔离罩
+
+                        // 建立剪裁区域：左右上方留足空间给阴影发散，底部死死卡在 X 轴 (height - paddingBottom)
+                        ctx.beginPath();
+                        ctx.rect(rectX - 20, 0, rectW + 40, height - paddingBottom);
+                        ctx.clip();
+                        
+                        // 选中时添加阴影
+                        if (currentHoverIndex === i) {
+                            ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+                            ctx.shadowBlur = 10;
+                            ctx.shadowOffsetY = 4;
+                        }
+
+                        ctx.fillStyle = gradient;
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(rectX, height - paddingBottom); 
+                        ctx.lineTo(rectX, rectY + r); 
+                        ctx.quadraticCurveTo(rectX, rectY, rectX + r, rectY); 
+                        ctx.lineTo(rectX + rectW - r, rectY); 
+                        ctx.quadraticCurveTo(rectX + rectW, rectY, rectX + rectW, rectY + r); 
+                        ctx.lineTo(rectX + rectW, height - paddingBottom); 
+                        ctx.fill(); 
+                        
+                        // 选中时叠加一层半透明黑色实现“颜色加深”效果，并重置阴影防污染
+                        if (currentHoverIndex === i) {
+                            ctx.shadowColor = 'transparent';
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+                            ctx.fill();
+                        }
+
+                        ctx.restore(); // 撤销隔离罩，不影响后续画布的正常渲染
+                    });
+                }
+
+                // 页面刚加载时，先调用一次渲染函数画出初始状态
+                render();
+
+                // 优化悬浮气泡逻辑，并加入重绘触发机制
+                canvas.onmousemove = (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    
+                    let hovered = false;
+                    let newHoverIndex = -1; // 用来临时存放这次鼠标碰到了哪个索引
+
+                    points.forEach((p, i) => {
+                        const hitLeft = p.x - step / 2;
+                        const hitRight = p.x + step / 2;
+                        
+                        if (mouseX >= hitLeft && mouseX < hitRight) {
+                            newHoverIndex = i; // 记录碰到了第几个柱子
+                            
+                            tooltip.style.display = 'block';
+                            
+                            let safeLeft = p.x;
+                            if (safeLeft > width - 60) safeLeft = width - 60;
+                            if (safeLeft < 60) safeLeft = 60;
+
+                            tooltip.style.left = safeLeft + 'px';
+                            tooltip.style.top = (p.y - 15) + 'px'; 
+                            tooltip.innerHTML = `
+                                <div style="font-size: 12px; color: #888; margin-bottom: 4px;">⏱️ ${p.data.time}</div>
+                                <div style="font-size: 16px; font-weight: bold; color: #4a8df5; margin-bottom: 2px;">${p.data.volume} 次</div>
+                                <div style="font-size: 11px; color: #666;">平均速度: ${p.data.speed} 次/分</div>
+                            `;
+                            hovered = true;
+                        }
+                    });
+
+                    // 核心逻辑：如果鼠标移动到了一个新的柱子上，我们就更新索引，并触发一次图表重绘
+                    if (currentHoverIndex !== newHoverIndex) {
+                        currentHoverIndex = newHoverIndex;
+                        render();
+                    }
+
+                    if (!hovered) {
+                        tooltip.style.display = 'none';
+                    }
+                };
+                
+                canvas.onmouseleave = () => {
+                    tooltip.style.display = 'none';
+                    // 当鼠标离开整个图表区域时，清空选中状态，并重绘恢复最初的样子
+                    if (currentHoverIndex !== -1) {
+                        currentHoverIndex = -1;
+                        render(); 
+                    }
+                };
+            }
+            
+            drawChart();
+        }
+
+        // 下面是我们新加的历史记录图表逻辑
+        const historyCanvas = document.getElementById('historyChart');
+        if (historyCanvas) {
+            const hCtx = historyCanvas.getContext('2d');
+            const historyTooltip = document.getElementById('historyTooltip');
+            
+            // 从 data.js 动态生成真实的近7天历史数据
+            var historyData = [];
+            const dayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+            for (let i = 6; i >= 0; i--) {
+                let d = new Date();
+                d.setDate(d.getDate() - i);
+                let dateStr = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0]; 
+                let shortDate = (d.getMonth() + 1) + '-' + d.getDate();
+                let weekStr = dayNames[d.getDay()];
+                let vol = (window.appData && window.appData[dateStr]) ? window.appData[dateStr].total : 0;
+                historyData.push({ date: i === 0 ? '今日' : shortDate, week: weekStr, volume: vol });
+            }
+
+            let activeIndex = -1;
+
+            function drawHistoryChart() {
+                // 动态获取父容器此刻的真实宽高，并赋给画布，实现完美自适应
+                const container = historyCanvas.parentElement;
+                historyCanvas.width = container.clientWidth;
+                historyCanvas.height = container.clientHeight;
+
+                const width = historyCanvas.width;
+                const height = historyCanvas.height;
+                
+                // 修复：如果当前页面被隐藏，宽高为0时直接跳过绘制，防止触发绘图引擎的崩溃BUG
+                if (width <= 0 || height <= 0) return;
+                
+                const paddingLeft = 45;
+                const paddingRight = 20;
+                const paddingBottom = 30; // 调整了底部留白
+                const paddingTop = 20;
+
+                hCtx.clearRect(0, 0, width, height);
+
+                const chartW = width - paddingLeft - paddingRight;
+                const chartH = height - paddingTop - paddingBottom;
+                
+                // 动态步长算法：引入和条形图完全一致的刻度梯度，彻底消灭奇葩零碎数值
+                let rawMax = Math.max(...historyData.map(d => d.volume), 1); 
+                const rowCount = 4; // 历史折线图划分为 4 个背景区域
+                let rawStep = rawMax / rowCount; 
+                let stepMag = Math.pow(10, Math.floor(Math.log10(rawStep > 0 ? rawStep : 1)));
+                let fraction = rawStep / stepMag;
+                let niceFraction = fraction <= 1 ? 1 : fraction <= 1.5 ? 1.5 : fraction <= 2 ? 2 : fraction <= 2.5 ? 2.5 : fraction <= 3 ? 3 : fraction <= 4 ? 4 : fraction <= 5 ? 5 : 10;
+                const maxVolume = niceFraction * stepMag * rowCount; 
+                
+                const step = chartW / (historyData.length - 1);
+                const rowH = chartH / rowCount;
+                
+                hCtx.textAlign = 'right';
+                hCtx.textBaseline = 'middle';
+                hCtx.font = '11px "Microsoft YaHei"';
+
+                for (let j = 0; j <= rowCount; j++) {
+                    const rowY = paddingTop + j * rowH;
+                    
+                    // 画虚线网格
+                    hCtx.beginPath();
+                    hCtx.setLineDash([4, 4]);
+                    hCtx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
+                    hCtx.moveTo(paddingLeft, rowY);
+                    hCtx.lineTo(width - paddingRight, rowY);
+                    hCtx.stroke();
+                    hCtx.setLineDash([]);
+
+                    // 画Y轴数字（底层算法兜底，这里算出来的绝对是完美的规整整数）
+                    let labelValue = Math.floor(maxVolume * ((rowCount - j) / rowCount));
+                    
+                    hCtx.fillStyle = '#999999';
+                    hCtx.fillText(labelValue, paddingLeft - 10, rowY);
+                }
+
+                // 计算所有数据点的坐标
+                const points = historyData.map((d, i) => {
+                    return {
+                        x: paddingLeft + i * step,
+                        y: height - paddingBottom - (d.volume / maxVolume) * chartH,
+                        data: d
+                    };
+                });
+
+                // 2. 绘制折线下方的浅色渐变填充
+                hCtx.beginPath();
+                hCtx.moveTo(points[0].x, height - paddingBottom);
+                points.forEach(p => hCtx.lineTo(p.x, p.y));
+                hCtx.lineTo(points[points.length - 1].x, height - paddingBottom);
+                hCtx.closePath();
+                
+                const fillGradient = hCtx.createLinearGradient(0, paddingTop, 0, height - paddingBottom);
+                fillGradient.addColorStop(0, 'rgba(134, 174, 244, 0.35)');
+                fillGradient.addColorStop(1, 'rgba(134, 174, 244, 0.0)');
+                hCtx.fillStyle = fillGradient;
+                hCtx.fill();
+
+                // 3. 绘制干脆利落的折线
+                hCtx.beginPath();
+                hCtx.moveTo(points[0].x, points[0].y);
+                points.forEach(p => hCtx.lineTo(p.x, p.y));
+                hCtx.strokeStyle = '#86aef4'; 
+                hCtx.lineWidth = 2.5;
+                hCtx.lineJoin = 'round';
+                hCtx.stroke();
+
+                // 4. 绘制底部的日期和星期文字
+                hCtx.textAlign = 'center';
+                hCtx.textBaseline = 'top';
+                points.forEach((p, i) => {
+                    // 画日期
+                    hCtx.fillStyle = (activeIndex === i || p.data.date === '今日') ? '#4a8df5' : '#999999';
+                    hCtx.font = (p.data.date === '今日') ? 'bold 11px "Microsoft YaHei"' : '11px "Microsoft YaHei"';
+                    hCtx.fillText(p.data.date, p.x, height - paddingBottom + 5);
+                    
+                    // 画星期
+                    hCtx.fillStyle = (activeIndex === i || p.data.date === '今日') ? '#4a8df5' : '#888888';
+                    hCtx.font = '10px "Microsoft YaHei"';
+                    hCtx.fillText(p.data.week, p.x, height - paddingBottom + 19);
+                });
+
+                // 5. 交互：如果鼠标悬停，绘制垂直指示线
+                if (activeIndex !== -1) {
+                    const activeP = points[activeIndex];
+                    hCtx.beginPath();
+                    hCtx.strokeStyle = 'rgba(74, 141, 245, 0.3)';
+                    hCtx.lineWidth = 1;
+                    hCtx.moveTo(activeP.x, paddingTop);
+                    hCtx.lineTo(activeP.x, height - paddingBottom);
+                    hCtx.stroke();
+
+                    const p = historyData[activeIndex];
+                    historyTooltip.innerHTML = `
+                        <div style="font-size: 12px; color: #888; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                            <span>${p.date === '今日' ? '🌟 今日战况' : '📅 ' + p.date}</span>
+                            <span style="background: rgba(0,0,0,0.04); padding: 2px 6px; border-radius: 4px; font-size: 11px;">${p.week}</span>
+                        </div>
+                        <div style="font-size: 16px; font-weight: bold; color: #4a8df5;">${p.volume.toLocaleString()} 次</div>
+                    `;
+                }
+
+                // 6. 绘制拐点圆圈
+                points.forEach((p, i) => {
+                    hCtx.beginPath();
+                    
+                    if (activeIndex === i) {
+                        hCtx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+                        hCtx.fillStyle = '#4a8df5';
+                        hCtx.fill();
+                        hCtx.lineWidth = 2;
+                        hCtx.strokeStyle = '#ffffff';
+                        hCtx.stroke();
+                    } else {
+                        hCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                        hCtx.fillStyle = '#ffffff';
+                        hCtx.fill();
+                        hCtx.lineWidth = 2;
+                        hCtx.strokeStyle = '#86aef4';
+                        hCtx.stroke();
+                    }
+                });
+            }
+
+            drawHistoryChart();
+
+            // 加入鼠标悬停的交互逻辑
+            historyCanvas.onmousemove = (e) => {
+                const rect = historyCanvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                
+                const width = historyCanvas.width;
+                const paddingLeft = 45; 
+                const paddingRight = 20;
+                const chartW = width - paddingLeft - paddingRight;
+                const step = chartW / (historyData.length - 1);
+
+                // 计算鼠标最靠近哪个数据点
+                let newHoverIndex = Math.round((mouseX - paddingLeft) / step);
+                
+                if (newHoverIndex < 0) newHoverIndex = 0;
+                if (newHoverIndex >= historyData.length) newHoverIndex = historyData.length - 1;
+
+                if (mouseX >= paddingLeft - step/2 && mouseX <= width - paddingRight + step/2) {
+                    if (activeIndex !== newHoverIndex) {
+                        activeIndex = newHoverIndex;
+                        drawHistoryChart();
+                        
+                        const p = historyData[activeIndex];
+                        const pointX = paddingLeft + activeIndex * step;
+                        const height = historyCanvas.height;
+                        const paddingTop = 20;
+                        const paddingBottom = 30;
+                        const chartH = height - paddingTop - paddingBottom;
+                        
+                        // 强制与绘制时的 maxVolume 算法保持一致，防止气泡 Y 轴悬浮高度错位
+                        let rawMax = Math.max(...historyData.map(d => d.volume), 1); 
+                        let rawStep = rawMax / 4; 
+                        let stepMag = Math.pow(10, Math.floor(Math.log10(rawStep > 0 ? rawStep : 1)));
+                        let fraction = rawStep / stepMag;
+                        let niceFraction = fraction <= 1 ? 1 : fraction <= 1.5 ? 1.5 : fraction <= 2 ? 2 : fraction <= 2.5 ? 2.5 : fraction <= 3 ? 3 : fraction <= 4 ? 4 : fraction <= 5 ? 5 : 10;
+                        const maxVolume = niceFraction * stepMag * 4; 
+                        
+                        const pointY = height - paddingBottom - (p.volume / maxVolume) * chartH;
+
+                        // 计算安全距离，防止气泡被右侧边缘和滚轮挡住
+                        let safeLeft = pointX;
+                        if (safeLeft > width - 90) {
+                            safeLeft = width - 90;
+                        }
+
+                        historyTooltip.style.display = 'block';
+                        historyTooltip.style.left = safeLeft + 'px';
+                        historyTooltip.style.top = pointY + 'px';
+                        historyTooltip.style.zIndex = '9999'; // 强制提升层级，确保在最上层
+                        
+                        historyTooltip.innerHTML = `
+                            <div style="font-size: 12px; color: #888; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                                <span>${p.date === '今日' ? '🌟 今日战况' : '📅 ' + p.date}</span>
+                                <span style="background: rgba(0,0,0,0.04); padding: 2px 6px; border-radius: 4px; font-size: 11px;">${p.week}</span>
+                            </div>
+                            <div style="font-size: 16px; font-weight: bold; color: #4a8df5;">${p.volume.toLocaleString()} 次</div>
+                        `;
+                    }
+                } else {
+                    if (activeIndex !== -1) {
+                        activeIndex = -1;
+                        drawHistoryChart();
+                        historyTooltip.style.display = 'none';
+                    }
+                }
+            };
+            
+            historyCanvas.onmouseleave = () => {
+                if (activeIndex !== -1) {
+                    activeIndex = -1;
+                    drawHistoryChart();
+                    historyTooltip.style.display = 'none';
+                }
+            };
+        }
+
+        // 全局关闭弹窗方法升级：智能分层拦截，只狙击目标弹窗
+        function closeModal(e) {
+            if (e && e.target && e.target.closest('.modal-content') && !e.target.classList.contains('modal-close')) {
+                // 特例：如果是热力图弹窗，且点击的不是按键/鼠标等硬件交互元素，则允许关闭
+                if (e.target.closest('#heatmapModal') && !e.target.closest('.kb-key, .mouse-btn-left, .mouse-btn-right, .mouse-wheel')) {
+                    // 放行关闭
+                } else {
+                    return; // 防止点击内容区时触发关闭
+                }
+            }
+            
+            // 智能判定：如果点击来源明确（点了某个弹窗的遮罩或叉号），只关闭当前这一层
+            if (e && e.target) {
+                const targetModal = e.target.closest('.modal-overlay');
+                if (targetModal) {
+                    targetModal.classList.remove('show');
+                    setTimeout(() => targetModal.style.display = 'none', 300);
+                    // 如果关的是胶囊商店，重置底层的选色状态锁，避免污染后续操作
+                    if (targetModal.id === 'themeModal') {
+                        window.pickingForDIYIndex = null;
+                    }
+                    return;
+                }
+            }
+
+            // 兜底逻辑：无源头的代码级强制关闭（比如系统提示弹窗按钮），才执行全量清场
+            document.querySelectorAll('.modal-overlay.show').forEach(modal => {
+                modal.classList.remove('show');
+                setTimeout(() => modal.style.display = 'none', 300);
+            });
+            window.pickingForDIYIndex = null;
+        }
+
+        // --- 新增：热力图生成与判定逻辑 ---
+        const heatmapContainer = document.getElementById('heatmap-container');
+        const heatmapTooltip = document.getElementById('heatmapTooltip');
+
+        // --- 新增：全天总热力图渲染逻辑 ---
+        const btnWholeDay = document.getElementById('btn-wholeday-heatmap');
+        if (btnWholeDay) {
+            btnWholeDay.onclick = () => {
+                window.currentModalHourIndex = 'wholeday'; 
+                const modal = document.getElementById('heatmapModal');
+                const modalTitle = document.getElementById('modalTitle');
+                const modalBody = document.getElementById('modalBody');
+                const modalContent = modal.querySelector('.modal-content');
+                
+                modalTitle.innerText = `今日全天 硬件操作总热力分布`;
+                const navBtns = modal.querySelectorAll('.modal-nav-btn');
+                navBtns.forEach(btn => btn.style.display = 'none'); 
+                modalContent.style.width = '960px';
+
+                let totalKeys = {};
+                let totalMouse = { left: 0, right: 0, scroll: 0 };
+                let liveData = getTodayData();
+                
+                if (liveData && liveData.hourly) {
+                    for (let i = 0; i < 24; i++) {
+                        let hData = liveData.hourly[String(i)];
+                        if (!hData) continue;
+                        if (hData.keys) {
+                            for (let k in hData.keys) {
+                                totalKeys[k] = (totalKeys[k] || 0) + hData.keys[k];
+                            }
+                        }
+                        if (hData.mouse) {
+                            totalMouse.left += (hData.mouse.left || 0);
+                            totalMouse.right += (hData.mouse.right || 0);
+                            totalMouse.scroll += (hData.mouse.scroll || 0);
+                        }
+                    }
+                }
+
+                let maxHit = 1;
+                for (let k in totalKeys) {
+                    if (totalKeys[k] > maxHit) maxHit = totalKeys[k];
+                }
+                if (totalMouse.left > maxHit) maxHit = totalMouse.left;
+                if (totalMouse.right > maxHit) maxHit = totalMouse.right;
+                if (totalMouse.scroll > maxHit) maxHit = totalMouse.scroll;
+                if (maxHit < 100) maxHit = 100;
+
+                const kbLayout = [
+                    [{k:'Esc', w:1}, {k:'', w:0.5, isGap:true}, {k:'F1', w:1}, {k:'F2', w:1}, {k:'F3', w:1}, {k:'F4', w:1}, {k:'', w:0.5, isGap:true}, {k:'F5', w:1}, {k:'F6', w:1}, {k:'F7', w:1}, {k:'F8', w:1}, {k:'', w:0.5, isGap:true}, {k:'F9', w:1}, {k:'F10', w:1}, {k:'F11', w:1}, {k:'F12', w:1}, {k:'', w:0.5, isGap:true}, {k:'PrtSc', w:1}, {k:'ScrLk', w:1}, {k:'Pause', w:1}],
+                    [{k:'~', w:1}, {k:'1', w:1}, {k:'2', w:1}, {k:'3', w:1}, {k:'4', w:1}, {k:'5', w:1}, {k:'6', w:1}, {k:'7', w:1}, {k:'8', w:1}, {k:'9', w:1}, {k:'0', w:1}, {k:'-', w:1}, {k:'=', w:1}, {k:'Back', w:2}, {k:'', w:0.5, isGap:true}, {k:'Ins', w:1}, {k:'Home', w:1}, {k:'PgUp', w:1}],
+                    [{k:'Tab', w:1.5}, {k:'Q', w:1}, {k:'W', w:1}, {k:'E', w:1}, {k:'R', w:1}, {k:'T', w:1}, {k:'Y', w:1}, {k:'U', w:1}, {k:'I', w:1}, {k:'O', w:1}, {k:'P', w:1}, {k:'[', w:1}, {k:']', w:1}, {k:'\\', w:1.5}, {k:'', w:0.5, isGap:true}, {k:'Del', w:1}, {k:'End', w:1}, {k:'PgDn', w:1}],
+                    [{k:'Caps', w:1.8}, {k:'A', w:1}, {k:'S', w:1}, {k:'D', w:1}, {k:'F', w:1}, {k:'G', w:1}, {k:'H', w:1}, {k:'J', w:1}, {k:'K', w:1}, {k:'L', w:1}, {k:';', w:1}, {k:'\'', w:1}, {k:'Enter', w:2.2}, {k:'', w:3.5, isGap:true}],
+                    [{k:'Shift', w:2.3}, {k:'Z', w:1}, {k:'X', w:1}, {k:'C', w:1}, {k:'V', w:1}, {k:'B', w:1}, {k:'N', w:1}, {k:'M', w:1}, {k:',', w:1}, {k:'.', w:1}, {k:'/', w:1}, {k:'Shift', w:2.7}, {k:'', w:1.5, isGap:true}, {k:'↑', w:1}, {k:'', w:1, isGap:true}],
+                    [{k:'Ctrl', w:1.2}, {k:'Win', w:1.2}, {k:'Alt', w:1.2}, {k:'Space', w:6.4}, {k:'Alt', w:1.2}, {k:'Fn', w:1.2}, {k:'Menu', w:1.2}, {k:'Ctrl', w:1.2}, {k:'', w:0.5, isGap:true}, {k:'←', w:1}, {k:'↓', w:1}, {k:'→', w:1}]
+                ];
+
+                let kbHTML = '<div class="hardware-wrapper"><div class="kb-container">';
+                kbLayout.forEach(row => {
+                    kbHTML += '<div class="kb-row">';
+                    row.forEach(keyObj => {
+                        if (keyObj.isGap) {
+                            kbHTML += `<div class="kb-key gap" style="flex: ${keyObj.w};"></div>`;
+                        } else {
+                            let keyNameMap = {
+                                'Space': 'space', 'Enter': 'enter', 'Shift': 'shift', 'Ctrl': 'ctrl_l', 
+                                'Alt': 'alt_l', 'Win': 'cmd_l', 'Caps': 'caps_lock', 'Del': 'delete', 
+                                'Ins': 'insert', 'PgUp': 'page_up', 'PgDn': 'page_down', 'PrtSc': 'print_screen', 
+                                'ScrLk': 'scroll_lock', 'Back': 'backspace', 'Esc': 'esc', 'Tab': 'tab', 
+                                '↑': 'up', '↓': 'down', '←': 'left', '→': 'right', 'Fn': 'fn', 'Menu': 'menu', 'Pause': 'pause'
+                            };
+                            let mappedKey = keyObj.k === '~' ? '`' : keyObj.k;
+                            let searchKey = keyNameMap[mappedKey] || mappedKey.toLowerCase();
+                            if (searchKey === 'cmd_l') searchKey = 'cmd'; 
+                            if (searchKey === 'ctrl_l') searchKey = 'ctrl';
+                            if (searchKey === 'alt_l') searchKey = 'alt';
+
+                            let hitCount = (totalKeys[searchKey] || 0) + 
+                                           (totalKeys[searchKey + '_l'] || 0) + 
+                                           (totalKeys[searchKey + '_r'] || 0) + 
+                                           (searchKey.includes('_l') ? (totalKeys[searchKey.replace('_l', '_r')] || 0) : 0);
+                            if (keyObj.k === '~') hitCount += (totalKeys['~'] || 0);
+                            if (searchKey === 'shift') hitCount += (totalKeys['shift_r'] || 0) + (totalKeys['shift_l'] || 0);
+
+                            let heatStyle = '';
+                            if (hitCount === 0) {
+                                heatStyle = 'background: linear-gradient(rgba(0,0,0,0.03), rgba(0,0,0,0.03)), #ffffff; color: #666;';
+                            } else {
+                                let ratio = hitCount / maxHit;
+                                if (ratio <= 0.02) heatStyle = 'background: linear-gradient(rgba(186, 230, 253, 0.9), rgba(186, 230, 253, 0.9)), #ffffff; color: #0284c7;';
+                                else if (ratio <= 0.08) heatStyle = 'background: linear-gradient(rgba(56, 189, 248, 0.9), rgba(56, 189, 248, 0.9)), #ffffff; color: #fff;';
+                                else if (ratio <= 0.2) heatStyle = 'background: linear-gradient(rgba(52, 211, 153, 0.9), rgba(52, 211, 153, 0.9)), #ffffff; color: #fff;';
+                                else if (ratio <= 0.45) heatStyle = 'background: linear-gradient(rgba(250, 204, 21, 0.9), rgba(250, 204, 21, 0.9)), #ffffff; color: #fff;';
+                                else if (ratio <= 0.75) heatStyle = 'background: linear-gradient(rgba(251, 146, 60, 0.9), rgba(251, 146, 60, 0.9)), #ffffff; color: #fff;';
+                                else heatStyle = 'background: linear-gradient(rgba(239, 68, 68, 0.95), rgba(239, 68, 68, 0.95)), #ffffff; color: #fff;';
+                            }
+
+                            kbHTML += `<div class="kb-key" data-raw-k="${keyObj.k}" data-name="${keyObj.k}键" data-hits="${hitCount}" style="flex: ${keyObj.w}; ${heatStyle}">${keyObj.k}</div>`;
+                        }
+                    });
+                    kbHTML += '</div>';
+                });
+                kbHTML += '</div>';
+
+                let leftClicks = totalMouse.left || 0;
+                let rightClicks = totalMouse.right || 0;
+                let scrolls = totalMouse.scroll || 0;
+                
+                const getMouseHeatStyle = (count) => {
+                    if (count === 0) return 'background: linear-gradient(rgba(0,0,0,0.03), rgba(0,0,0,0.03)), #ffffff;';
+                    let ratio = count / maxHit;
+                    if (ratio <= 0.02) return 'background: linear-gradient(rgba(186, 230, 253, 0.9), rgba(186, 230, 253, 0.9)), #ffffff;';
+                    if (ratio <= 0.08) return 'background: linear-gradient(rgba(56, 189, 248, 0.9), rgba(56, 189, 248, 0.9)), #ffffff;';
+                    if (ratio <= 0.2) return 'background: linear-gradient(rgba(52, 211, 153, 0.9), rgba(52, 211, 153, 0.9)), #ffffff;';
+                    if (ratio <= 0.45) return 'background: linear-gradient(rgba(250, 204, 21, 0.9), rgba(250, 204, 21, 0.9)), #ffffff;';
+                    if (ratio <= 0.75) return 'background: linear-gradient(rgba(251, 146, 60, 0.9), rgba(251, 146, 60, 0.9)), #ffffff;';
+                    return 'background: linear-gradient(rgba(239, 68, 68, 0.95), rgba(239, 68, 68, 0.95)), #ffffff;';
+                };
+
+                kbHTML += `
+                <div class="mouse-container">
+                    <div class="mouse-title">全天鼠标活跃度</div>
+                    <div class="mouse-body">
+                        <div class="mouse-btn-left" data-name="鼠标左键" data-hits="${leftClicks}" style="${getMouseHeatStyle(leftClicks)}"></div>
+                        <div class="mouse-btn-right" data-name="鼠标右键" data-hits="${rightClicks}" style="${getMouseHeatStyle(rightClicks)}"></div>
+                        <div class="mouse-wheel" data-name="鼠标滚轮" data-hits="${scrolls}" style="${getMouseHeatStyle(scrolls)}"></div>
+                    </div>
+                    <div class="mouse-stats">
+                        左键：<span>${leftClicks}</span> 次<br>
+                        右键：<span>${rightClicks}</span> 次<br>
+                        滚轮：<span>${scrolls}</span> 刻
+                    </div>
+                </div>
+                </div>`;
+                
+                modalBody.innerHTML = kbHTML;
+
+                const hwTooltip = document.getElementById('hardwareTooltip');
+                const hwElements = modalBody.querySelectorAll('[data-hits]');
+                hwElements.forEach(el => {
+                    el.onmouseenter = () => {
+                        window.currentHoveredHardware = el;
+                        const name = el.getAttribute('data-name');
+                        const hits = el.getAttribute('data-hits');
+                        hwTooltip.innerHTML = `<span style="font-size: 15px; font-weight: bold; color: #1a1a1a;">${name}</span> <span style="color: #888; margin: 0 4px;">:</span> <span style="font-weight: 600; color: #4a8df5; font-size: 14px;">${hits} 次/刻</span>`;
+                        hwTooltip.style.display = 'block';
+                        const rect = el.getBoundingClientRect();
+                        const tooltipWidth = hwTooltip.offsetWidth;
+                        const tooltipHeight = hwTooltip.offsetHeight;
+                        let leftPos = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+                        let topPos = rect.top - tooltipHeight - 8; 
+                        const windowWidth = window.innerWidth;
+                        if (leftPos < 10) leftPos = 10; 
+                        else if (leftPos + tooltipWidth > windowWidth - 10) leftPos = windowWidth - tooltipWidth - 10; 
+                        hwTooltip.style.left = leftPos + 'px';
+                        hwTooltip.style.top = topPos + 'px';
+                    };
+                    el.onmouseleave = () => {
+                        hwTooltip.style.display = 'none';
+                    };
+                });
+
+                modal.style.display = 'flex';
+                setTimeout(() => modal.classList.add('show'), 10);
+            };
+        }
+
+        if (heatmapContainer) {
+            // 真实对接 Python 数据库：提取 24 小时的行为特征数据
+            const heatmapData = [];
+            for (let i = 0; i < 24; i++) {
+                let hourStr = String(i);
+                let hData = (realData && realData.hourly && realData.hourly[hourStr]) ? realData.hourly[hourStr] : { total: 0, keys: {}, mouse: {} };
+                let keys = hData.keys || {};
+                let mouse = hData.mouse || {};
+                let keyVol = hData.total || 0;
+                let mouseVol = (mouse.left || 0) + (mouse.right || 0) + (mouse.scroll || 0);
+                let vol = keyVol + mouseVol;
+                
+                let hType = 'none';
+                let hDesc = '';
+                let hIntensity = 0;
+
+                if (vol > 0) {
+                    hIntensity = Math.min(vol / 1500, 1.0); 
+                    if (hIntensity < 0.2) hIntensity = 0.2; 
+                    
+                    let wasd = (keys['w']||0) + (keys['a']||0) + (keys['s']||0) + (keys['d']||0);
+                    let codingKeys = (keys['ctrl_l']||0) + (keys['alt_l']||0) + (keys['tab']||0) + (keys['esc']||0);
+                    let enterKeys = keys['enter'] || 0;
+                    let scrolls = mouse.scroll || 0;
+                    let designKeys = (keys['space']||0) + (keys['shift']||0) + (keys['ctrl_l']||0) + (keys['alt_l']||0) + (keys['z']||0);
+                    let mediaKeys = keys['space'] || 0;
+                    
+                    // 新增加设计类和影音类识别
+                    if (keyVol > 0 && wasd > keyVol * 0.25) { hType = 'game'; }
+                    else if (keyVol > 0 && designKeys > keyVol * 0.2 && (mouse.left || 0) > vol * 0.1) { hType = 'design'; }
+                    else if (keyVol > 0 && codingKeys > keyVol * 0.1) { hType = 'code'; }
+                    else if (scrolls > vol * 0.5) { hType = 'read'; }
+                    else if (keyVol > 0 && mediaKeys > keyVol * 0.3 && keyVol < 1000) { hType = 'video'; }
+                    else if (keyVol > 0 && enterKeys > keyVol * 0.05) { hType = 'chat'; }
+                    else if (keyVol > 0) { hType = 'type'; }
+                    else { hType = 'read'; }
+                    
+                    // 强度计算：0低，1中，2高
+                    let level = vol < 1000 ? 0 : (vol <= 5000 ? 1 : 2);
+                    
+                    const descMap = {
+                        'game': ['轻度游戏，偶尔按按WASD', '激战中，手指在键盘上跳跃', '团战时刻，键盘都快按穿了'],
+                        'code': ['改了几行代码，调试中', '沉浸式写代码，Ctrl+C/V 很忙', '赶项目进度，键盘冒火星了'],
+                        'type': ['回了几条消息，闲聊中', '码字状态不错，思路挺顺', '文思如泉涌，手指跟不上脑子'],
+                        'read': ['随便翻翻，划划水', '认真浏览，滚轮很忙', '沉浸式阅读，忘了时间'],
+                        'design': ['微调一下，改改参数', '创作中，快捷键用得很溜', '灵感爆发，图层满天飞'],
+                        'chat': ['回了两句，敷衍一下', '聊得正嗨，回车键很忙', '群聊轰炸，手都酸了'],
+                        'video': ['随便看看，空格键暂停', '追剧中，偶尔快进', '刷视频停不下来，键盘都冷了']
+                    };
+                    
+                    hDesc = descMap[hType] ? descMap[hType][level] : '设备活跃中';
+                } else {
+                    const idleMsgs = ['键盘休息中，你也在休息吗', '人去哪了，键盘在等你', '摸鱼时间，键盘也摸鱼'];
+                    hDesc = idleMsgs[Math.floor(Math.random() * idleMsgs.length)];
+                }
+                
+                heatmapData.push({ time: `${String(i).padStart(2, '0')}:00 - ${String(i+1).padStart(2, '0')}:00`, type: hType, intensity: hIntensity, desc: hDesc, hourIndex: hourStr });
+            }
+
+            const colorMap = {
+                'game': '239, 68, 68',   // 红
+                'code': '16, 185, 129',  // 绿
+                'type': '59, 130, 246',  // 蓝
+                'read': '168, 85, 247',  // 紫
+                'design': '6, 182, 212', // 青
+                'chat': '236, 72, 153',  // 粉
+                'video': '245, 158, 11', // 橙
+                'none': '226, 232, 240'  // 灰
+            };
+
+            heatmapData.forEach((data, index) => {
+                const block = document.createElement('div');
+                block.className = 'heat-block';
+                
+                let alpha = data.type === 'none' ? 1 : (data.intensity * 0.7 + 0.3);
+                let rgb = colorMap[data.type];
+                block.style.background = data.type === 'none' ? '#e2e8f0' : `rgba(${rgb}, ${alpha})`;
+
+                // 点击弹出详细数据
+                block.onclick = () => {
+                    window.currentModalHourIndex = data.hourIndex; // 新增：全局记录当前打开的弹窗是哪一小时
+                    
+                    const modal = document.getElementById('heatmapModal');
+                    const modalTitle = document.getElementById('modalTitle');
+                    const modalBody = document.getElementById('modalBody');
+                    const modalContent = modal.querySelector('.modal-content');
+                    
+                    modalTitle.innerText = `${data.time} 硬件操作热力分布`;
+                    
+                    let currentType = block.dataset.type || data.type; // 新增：撕裂闭包，强制读取 Python 注入的最新状态
+                    
+                    const navBtns = modal.querySelectorAll('.modal-nav-btn');
+                    if (currentType === 'none') {
+                        navBtns.forEach(btn => btn.style.display = 'none'); // 无记录时隐藏左右切换按钮
+                        modalContent.style.width = '400px';
+                        modalBody.innerHTML = `<div style="text-align:center; color:#888; padding: 40px 0;">该时段设备处于休眠状态，无操作记录 💤</div>`;
+                    } else {
+                        navBtns.forEach(btn => btn.style.display = 'flex'); // 有记录时恢复显示
+                        modalContent.style.width = '960px';
+                        // 更全的键盘布局（类 87 键布局），增加了 Esc、F 区、删除键、方向键等
+                        const kbLayout = [
+                            [{k:'Esc', w:1}, {k:'', w:0.5, isGap:true}, {k:'F1', w:1}, {k:'F2', w:1}, {k:'F3', w:1}, {k:'F4', w:1}, {k:'', w:0.5, isGap:true}, {k:'F5', w:1}, {k:'F6', w:1}, {k:'F7', w:1}, {k:'F8', w:1}, {k:'', w:0.5, isGap:true}, {k:'F9', w:1}, {k:'F10', w:1}, {k:'F11', w:1}, {k:'F12', w:1}, {k:'', w:0.5, isGap:true}, {k:'PrtSc', w:1}, {k:'ScrLk', w:1}, {k:'Pause', w:1}],
+                            [{k:'~', w:1}, {k:'1', w:1}, {k:'2', w:1}, {k:'3', w:1}, {k:'4', w:1}, {k:'5', w:1}, {k:'6', w:1}, {k:'7', w:1}, {k:'8', w:1}, {k:'9', w:1}, {k:'0', w:1}, {k:'-', w:1}, {k:'=', w:1}, {k:'Back', w:2}, {k:'', w:0.5, isGap:true}, {k:'Ins', w:1}, {k:'Home', w:1}, {k:'PgUp', w:1}],
+                            [{k:'Tab', w:1.5}, {k:'Q', w:1}, {k:'W', w:1}, {k:'E', w:1}, {k:'R', w:1}, {k:'T', w:1}, {k:'Y', w:1}, {k:'U', w:1}, {k:'I', w:1}, {k:'O', w:1}, {k:'P', w:1}, {k:'[', w:1}, {k:']', w:1}, {k:'\\', w:1.5}, {k:'', w:0.5, isGap:true}, {k:'Del', w:1}, {k:'End', w:1}, {k:'PgDn', w:1}],
+                            [{k:'Caps', w:1.8}, {k:'A', w:1}, {k:'S', w:1}, {k:'D', w:1}, {k:'F', w:1}, {k:'G', w:1}, {k:'H', w:1}, {k:'J', w:1}, {k:'K', w:1}, {k:'L', w:1}, {k:';', w:1}, {k:'\'', w:1}, {k:'Enter', w:2.2}, {k:'', w:3.5, isGap:true}],
+                            [{k:'Shift', w:2.3}, {k:'Z', w:1}, {k:'X', w:1}, {k:'C', w:1}, {k:'V', w:1}, {k:'B', w:1}, {k:'N', w:1}, {k:'M', w:1}, {k:',', w:1}, {k:'.', w:1}, {k:'/', w:1}, {k:'Shift', w:2.7}, {k:'', w:1.5, isGap:true}, {k:'↑', w:1}, {k:'', w:1, isGap:true}],
+                            [{k:'Ctrl', w:1.2}, {k:'Win', w:1.2}, {k:'Alt', w:1.2}, {k:'Space', w:6.4}, {k:'Alt', w:1.2}, {k:'Fn', w:1.2}, {k:'Menu', w:1.2}, {k:'Ctrl', w:1.2}, {k:'', w:0.5, isGap:true}, {k:'←', w:1}, {k:'↓', w:1}, {k:'→', w:1}]
+                        ];
+
+                        let kbHTML = '<div class="hardware-wrapper"><div class="kb-container">';
+                        kbLayout.forEach(row => {
+                            kbHTML += '<div class="kb-row">';
+                            row.forEach(keyObj => {
+                                if (keyObj.isGap) {
+                                    // 渲染占位用的透明缝隙
+                                    kbHTML += `<div class="kb-key gap" style="flex: ${keyObj.w};"></div>`;
+                                } else {
+                                    // 1. 先生成一个基础随机热度
+                                    let baseHeat = Math.random();
+                                    
+                                    // 2. 为了真实感，如果此时是特定活动，给特定按键加权重！
+                                    if (currentType === 'game' && ['W','A','S','D','Space','Shift','F','R'].includes(keyObj.k)) {
+                                        baseHeat = 0.8 + Math.random() * 0.2; // 游戏时 WASD 高热度
+                                    } else if (currentType === 'code' && ['Ctrl','C','V','Space','Enter','Tab','Back','S'].includes(keyObj.k)) {
+                                        baseHeat = 0.7 + Math.random() * 0.3; // 编程时快捷键高热度
+                                    } else if (currentType === 'design' && ['Ctrl','Z','Shift','Alt','Space'].includes(keyObj.k)) {
+                                        baseHeat = 0.8 + Math.random() * 0.2; // 设计时修饰键高热度
+                                    }
+                                    
+                                     // 3. 直接从数据库中精准提取【当前小时】这个按键的次数！
+                                    let keyNameMap = {
+                                        'Space': 'space', 'Enter': 'enter', 'Shift': 'shift', 'Ctrl': 'ctrl_l', 
+                                        'Alt': 'alt_l', 'Win': 'cmd_l', 'Caps': 'caps_lock', 'Del': 'delete', 
+                                        'Ins': 'insert', 'PgUp': 'page_up', 'PgDn': 'page_down', 'PrtSc': 'print_screen', 
+                                        'ScrLk': 'scroll_lock', 'Back': 'backspace', 'Esc': 'esc', 'Tab': 'tab', 
+                                        '↑': 'up', '↓': 'down', '←': 'left', '→': 'right', 'Fn': 'fn', 'Menu': 'menu', 'Pause': 'pause'
+                                    };
+                                    // 动态拦截特殊按键映射：波浪号映射到反引号，Win键映射到cmd（包含cmd_l/r）
+                                    let mappedKey = keyObj.k === '~' ? '`' : keyObj.k;
+                                    let searchKey = keyNameMap[mappedKey] || mappedKey.toLowerCase();
+                                    if (searchKey === 'cmd_l') searchKey = 'cmd'; 
+                                    if (searchKey === 'ctrl_l') searchKey = 'ctrl';
+                                    if (searchKey === 'alt_l') searchKey = 'alt';
+
+                                    let liveData = getTodayData();
+                                    let currentHourData = (liveData && liveData.hourly && liveData.hourly[data.hourIndex]) ? liveData.hourly[data.hourIndex] : { keys: {}, mouse: {} };
+                                    let hourKeys = currentHourData.keys || {};
+                                    
+                                    let hitCount = (hourKeys[searchKey] || 0) + 
+                                                   (hourKeys[searchKey + '_l'] || 0) + 
+                                                   (hourKeys[searchKey + '_r'] || 0) + 
+                                                   (searchKey.includes('_l') ? (hourKeys[searchKey.replace('_l', '_r')] || 0) : 0);
+                                    
+                                    // 额外叠加修饰状态下的按键
+                                    if (keyObj.k === '~') hitCount += (hourKeys['~'] || 0);
+                                    if (searchKey === 'shift') hitCount += (hourKeys['shift_r'] || 0) + (hourKeys['shift_l'] || 0);
+                                    
+                                    // 4. 全新高敏度颜色阶梯，让游戏(WASD)和打字(字母)场景一目了然
+                                    let heatStyle = '';
+                                    if (hitCount === 0) {
+                                        heatStyle = 'background: linear-gradient(rgba(0,0,0,0.03), rgba(0,0,0,0.03)), #ffffff; color: #666;';
+                                    } else if (hitCount <= 10) {
+                                        heatStyle = 'background: linear-gradient(rgba(186, 230, 253, 0.9), rgba(186, 230, 253, 0.9)), #ffffff; color: #0284c7;'; // 浅蓝
+                                    } else if (hitCount <= 50) {
+                                        heatStyle = 'background: linear-gradient(rgba(56, 189, 248, 0.9), rgba(56, 189, 248, 0.9)), #ffffff; color: #fff;'; // 亮蓝
+                                    } else if (hitCount <= 150) {
+                                        heatStyle = 'background: linear-gradient(rgba(52, 211, 153, 0.9), rgba(52, 211, 153, 0.9)), #ffffff; color: #fff;'; // 翠绿
+                                    } else if (hitCount <= 300) {
+                                        heatStyle = 'background: linear-gradient(rgba(250, 204, 21, 0.9), rgba(250, 204, 21, 0.9)), #ffffff; color: #fff;'; // 金黄
+                                    } else if (hitCount <= 500) {
+                                        heatStyle = 'background: linear-gradient(rgba(251, 146, 60, 0.9), rgba(251, 146, 60, 0.9)), #ffffff; color: #fff;'; // 鲜橙
+                                    } else {
+                                        heatStyle = 'background: linear-gradient(rgba(239, 68, 68, 0.95), rgba(239, 68, 68, 0.95)), #ffffff; color: #fff;'; // 爆红
+                                    }
+
+                                    // 新增 data-raw-k 属性，方便 Python 脚本精准定位修改该按键
+                                    kbHTML += `<div class="kb-key" data-raw-k="${keyObj.k}" data-name="${keyObj.k}键" data-hits="${hitCount}" style="flex: ${keyObj.w}; ${heatStyle}">${keyObj.k}</div>`;
+                                }
+                            });
+                            kbHTML += '</div>';
+                        });
+                        kbHTML += '</div>';
+
+                        // --- 鼠标真实数据接入（当前小时） ---
+                        let liveDataMouse = getTodayData();
+                        let currentHourMouse = (liveDataMouse && liveDataMouse.hourly && liveDataMouse.hourly[data.hourIndex] && liveDataMouse.hourly[data.hourIndex].mouse) ? liveDataMouse.hourly[data.hourIndex].mouse : {};
+                        let leftClicks = currentHourMouse.left || 0;
+                        let rightClicks = currentHourMouse.right || 0;
+                        let scrolls = currentHourMouse.scroll || 0;
+                        
+                        // 鼠标单独使用的颜色映射器：专为高频点击量身定制的抗压阶梯
+                        const getMouseHeatStyle = (count) => {
+                            if (count === 0) return 'background: linear-gradient(rgba(0,0,0,0.03), rgba(0,0,0,0.03)), #ffffff;';
+                            if (count <= 50) return 'background: linear-gradient(rgba(186, 230, 253, 0.9), rgba(186, 230, 253, 0.9)), #ffffff;';
+                            if (count <= 150) return 'background: linear-gradient(rgba(56, 189, 248, 0.9), rgba(56, 189, 248, 0.9)), #ffffff;';
+                            if (count <= 300) return 'background: linear-gradient(rgba(52, 211, 153, 0.9), rgba(52, 211, 153, 0.9)), #ffffff;';
+                            if (count <= 600) return 'background: linear-gradient(rgba(250, 204, 21, 0.9), rgba(250, 204, 21, 0.9)), #ffffff;';
+                            if (count <= 1000) return 'background: linear-gradient(rgba(251, 146, 60, 0.9), rgba(251, 146, 60, 0.9)), #ffffff;';
+                            return 'background: linear-gradient(rgba(239, 68, 68, 0.95), rgba(239, 68, 68, 0.95)), #ffffff;';
+                        };
+
+                        kbHTML += `
+                        <div class="mouse-container">
+                            <div class="mouse-title">鼠标活跃度</div>
+                            <div class="mouse-body">
+                                <div class="mouse-btn-left" data-name="鼠标左键" data-hits="${leftClicks}" style="${getMouseHeatStyle(leftClicks)}"></div>
+                                <div class="mouse-btn-right" data-name="鼠标右键" data-hits="${rightClicks}" style="${getMouseHeatStyle(rightClicks)}"></div>
+                                <div class="mouse-wheel" data-name="鼠标滚轮" data-hits="${scrolls}" style="${getMouseHeatStyle(scrolls)}"></div>
+                            </div>
+                            <div class="mouse-stats">
+                                左键：<span>${leftClicks}</span> 次<br>
+                                右键：<span>${rightClicks}</span> 次<br>
+                                滚轮：<span>${scrolls}</span> 刻
+                            </div>
+                        </div>
+                        </div>`;
+                        
+                        modalBody.innerHTML = kbHTML;
+                        
+                        // 新增：为所有带有 data-hits 属性的硬件元素统一绑定悬浮气泡事件
+                        const hwTooltip = document.getElementById('hardwareTooltip');
+                        const hwElements = modalBody.querySelectorAll('[data-hits]');
+                        hwElements.forEach(el => {
+                            el.onmouseenter = () => {
+                                window.currentHoveredHardware = el; // 新增：记录当前鼠标正悬停在哪个硬件上
+                                const name = el.getAttribute('data-name');
+                                const hits = el.getAttribute('data-hits');
+                               // 将获取到的名字和次数动态填入悬浮卡片中
+                                // 【修改】将按键名称独立加粗、放大，并加深颜色，使其更加美观醒目
+                                hwTooltip.innerHTML = `<span style="font-size: 15px; font-weight: bold; color: #1a1a1a;">${name}</span> <span style="color: #888; margin: 0 4px;">:</span> <span style="font-weight: 600; color: #4a8df5; font-size: 14px;">${hits} 次/刻</span>`;
+                                hwTooltip.style.display = 'block';
+                                
+                                // 获取当前按键或鼠标按钮在屏幕上的真实固定位置和大小
+                                const rect = el.getBoundingClientRect();
+                                const tooltipWidth = hwTooltip.offsetWidth;
+                                const tooltipHeight = hwTooltip.offsetHeight;
+                                
+                                // 核心修改：让坐标死死钉在按键的正上方，距离按键8像素刚刚好
+                                let leftPos = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+                                let topPos = rect.top - tooltipHeight - 8; 
+                                
+                                // 仅保留左右防挤压边缘，彻底去除顶部的强制位移约束
+                                const windowWidth = window.innerWidth;
+                                if (leftPos < 10) {
+                                    leftPos = 10; 
+                                } else if (leftPos + tooltipWidth > windowWidth - 10) {
+                                    leftPos = windowWidth - tooltipWidth - 10; 
+                                }
+                                
+                                // 最后应用绝对坐标
+                                hwTooltip.style.left = leftPos + 'px';
+                                hwTooltip.style.top = topPos + 'px';
+                            };
+                            el.onmouseleave = () => {
+                                hwTooltip.style.display = 'none'; // 鼠标移走时自动隐藏卡片
+                            };
+                        });
+                    }
+                    
+                    modal.style.display = 'flex';
+                    setTimeout(() => modal.classList.add('show'), 10);
+                };
+
+                block.onmousemove = (e) => {
+                    heatmapTooltip.style.display = 'block';
+                    
+                    // 动态读取最新的类型和描述（兼容后台实时注入的数据）
+                    let cType = block.dataset.type || data.type;
+                    let cDesc = block.dataset.desc || data.desc;
+
+                    let icon = '💤';
+                    if (cType === 'game') icon = '🎮';
+                    if (cType === 'code') icon = '💻';
+                    if (cType === 'type') icon = '📝';
+                    if (cType === 'read') icon = '📖';
+                    if (cType === 'design') icon = '🎨';
+                    if (cType === 'chat') icon = '💬';
+                    if (cType === 'video') icon = '🎬';
+
+                    let textColor = cType === 'none' ? '#64748b' : `rgb(${colorMap[cType]})`;
+
+                    // 步骤一：先填入内容，让气泡撑开真实的宽高
+                    heatmapTooltip.innerHTML = `
+                        <div style="font-size: 12px; color: #888; margin-bottom: 6px;">⏱️ ${data.time}</div>
+                        <div style="font-size: 14px; font-weight: 600; color: ${textColor};">${icon} ${cDesc}</div>
+                    `;
+
+                    // 步骤二：获取真实的尺寸和边界数据
+                    const rect = block.getBoundingClientRect();
+                    const containerRect = heatmapContainer.parentElement.getBoundingClientRect();
+                    const tooltipWidth = heatmapTooltip.offsetWidth;
+                    const tooltipHeight = heatmapTooltip.offsetHeight;
+                    
+                    // 步骤三：计算理想的居中 X 坐标
+                    let leftPos = (rect.left - containerRect.left) + (rect.width / 2) - (tooltipWidth / 2);
+                    
+                    // 步骤四：边缘防碰撞检测
+                    if (leftPos < 10) {
+                        // 碰到左边缘，强制留出 10 像素的安全距离
+                        leftPos = 10; 
+                    } else if (leftPos + tooltipWidth > containerRect.width - 10) {
+                        // 碰到右边缘，向左挤压，同样留出 10 像素距离
+                        leftPos = containerRect.width - tooltipWidth - 10; 
+                    }
+
+                    // 步骤五：应用最终坐标，取消旧的居中 transform
+                    heatmapTooltip.style.transform = 'none';
+                    heatmapTooltip.style.left = leftPos + 'px';
+                    // 高度也改成动态计算，保证距离方块始终有 15 像素的舒适留白
+                    heatmapTooltip.style.top = (rect.top - containerRect.top - tooltipHeight - 15) + 'px';
+                };
+
+                block.onmouseleave = () => {
+                    heatmapTooltip.style.display = 'none';
+                };
+
+                heatmapContainer.appendChild(block);
+            });
+        }
+
+        // 胶囊主题切换函数
+        // 胶囊主题切换函数
+        function changeTheme(el) {
+            const color = el.getAttribute('data-color');
+            
+            // 如果是在给自定义心流选色，拦截原有逻辑
+            if (window.pickingForDIYIndex !== undefined && window.pickingForDIYIndex !== null) {
+                let mock = el.querySelector('.capsule-mock');
+                diyRules[window.pickingForDIYIndex].color = color;
+                diyRules[window.pickingForDIYIndex].cssPreview = mock ? mock.style.background : color;
+                diyRules[window.pickingForDIYIndex].themeName = el.querySelector('.theme-name').innerText;
+                window.pickingForDIYIndex = null;
+                renderDIYRules();
+                
+                // 仅关闭商店弹窗，保留底层的阈值配置弹窗
+                let themeModal = document.getElementById('themeModal');
+                themeModal.classList.remove('show');
+                setTimeout(() => themeModal.style.display = 'none', 300);
+                return;
+            }
+
+            const picker = document.getElementById('theme-color-picker');
+            if (picker) {
+                Array.from(picker.querySelectorAll('.theme-card')).forEach(child => {
+                    child.classList.remove('active');
+                });
+            }
+            el.classList.add('active');
+            
+            if (window.backend) {
+                window.backend.set_capsule_theme(color);
+                
+                // 【互斥逻辑】手动选择颜色后，强制关闭动态发光开关
+                const dynToggle = document.getElementById('dynamic-color-toggle');
+                if (dynToggle && dynToggle.dataset.state === 'on') {
+                    dynToggle.dataset.state = 'off';
+                    dynToggle.style.background = '#e0e0e0';
+                    dynToggle.children[0].style.left = '2px';
+                    window.backend.set_dynamic_color(false);
+                }
+            }
+            closeModal(); // 选完自动关闭商店界面，干脆利落
+        }
+
+        // 全局滚轮加速引擎：采用 RAF 物理累加阻尼算法，彻底解决快速交替滑动时的动画冲突
+        let scrollTarget = null;
+        let targetY = 0;
+        let currentY = 0;
+        let isAnimating = false;
+
+        function smoothScroll() {
+            if (!scrollTarget) return;
+            currentY += (targetY - currentY) * 0.15; // 0.15 为物理阻尼系数，越小越柔和
+            scrollTarget.scrollTop = currentY;
+            
+            if (Math.abs(targetY - currentY) > 0.5) {
+                requestAnimationFrame(smoothScroll);
+            } else {
+                scrollTarget.scrollTop = targetY; // 像素级对齐收尾
+                isAnimating = false;
+            }
+        }
+
+        // 独立封装：热力图时段切换引擎（供按键和可视化按钮共用）
+        window.switchHeatmapHour = function(dir, event) {
+            if (event) event.stopPropagation(); // 阻止冒泡，防止点按钮时误关了弹窗
+            let currentIndex = parseInt(window.currentModalHourIndex);
+            if (isNaN(currentIndex)) return;
+            
+            let nextIndex = dir === 'prev' ? currentIndex - 1 : currentIndex + 1;
+            if (nextIndex < 0) nextIndex = 23;
+            if (nextIndex > 23) nextIndex = 0;
+            
+            const blocks = document.querySelectorAll('.heat-block');
+            if (blocks[nextIndex]) {
+                const modalBody = document.getElementById('modalBody');
+                modalBody.classList.remove('slide-next-anim', 'slide-prev-anim');
+                void modalBody.offsetWidth; 
+                modalBody.classList.add(dir === 'prev' ? 'slide-prev-anim' : 'slide-next-anim');
+                
+                blocks[nextIndex].click();
+            }
+        };
+
+        window.addEventListener('keydown', function(e) {
+            const heatmapModal = document.getElementById('heatmapModal');
+            if (heatmapModal && heatmapModal.classList.contains('show')) {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    closeModal({ target: heatmapModal });
+                } else if (e.code === 'ArrowLeft') {
+                    e.preventDefault();
+                    window.switchHeatmapHour('prev');
+                } else if (e.code === 'ArrowRight') {
+                    e.preventDefault();
+                    window.switchHeatmapHour('next');
+                }
+            }
+        });
+
+        window.addEventListener('wheel', function(e) {
+            const target = e.target.closest('#theme-color-picker, #tab-analysis, #tab-history, #tab-settings, #diy-rules-container');
+            if (target) {
+                e.preventDefault();
+                
+                // 防断层：目标切换或动画停止时，强制同步真实物理坐标（防止用户手动拖拽滚动条造成的错位）
+                if (scrollTarget !== target || !isAnimating) {
+                    scrollTarget = target;
+                    targetY = target.scrollTop;
+                    currentY = target.scrollTop;
+                }
+                
+                // 动能累加：将距离叠加给目标，而不是让浏览器不断重新触发滚动指令
+                targetY += e.deltaY * 2.5;
+                // 边界碰撞体积限制，防止滑动过冲
+                targetY = Math.max(0, Math.min(targetY, target.scrollHeight - target.clientHeight));
+                
+                if (!isAnimating) {
+                    isAnimating = true;
+                    requestAnimationFrame(smoothScroll);
+                }
+            }
+        }, { passive: false });
+    </script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+Pillow
+PyQt5
+PyQtWebEngine
+pynput
+pystray
